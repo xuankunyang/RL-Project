@@ -14,10 +14,12 @@ class PPOAgent:
         
         # Hyperparameters
         self.gamma = args.gamma
-        self.lr = args.lr
-        self.clip_param = 0.2
+        self.lr_actor = args.lr_actor
+        self.lr_critic = args.lr_critic
+        self.clip_param = args.ppo_clip
         self.ppo_epoch = 10
         self.batch_size = 64
+        self.hidden_dim = args.hidden_dim_ppo
         self.value_loss_coef = 0.5
         self.entropy_coef = 0.01
         self.max_grad_norm = 0.5
@@ -27,8 +29,20 @@ class PPOAgent:
         self.state_dim = env.observation_space.shape[0]
         self.action_dim = env.action_space.shape[0]
         
-        self.policy = GaussianPolicy(self.state_dim, self.action_dim).to(self.device)
-        self.optimizer = optim.Adam(self.policy.parameters(), lr=self.lr)
+        self.policy = GaussianPolicy(self.state_dim, self.action_dim, hidden_dim=self.hidden_dim).to(self.device)
+        
+        # Separate Parameter Groups
+        # GaussianPolicy has: actor_net, mean_layer, log_std_layer (Actor parts)
+        #                     critic_net (Critic parts)
+        actor_params = list(self.policy.actor_net.parameters()) + \
+                       list(self.policy.mean_layer.parameters()) + \
+                       [self.policy.log_std_layer]
+        critic_params = list(self.policy.critic_net.parameters())
+        
+        self.optimizer = optim.Adam([
+            {'params': actor_params, 'lr': self.lr_actor},
+            {'params': critic_params, 'lr': self.lr_critic}
+        ])
         
         # Buffer
         self.buffer = RolloutBuffer(self.rollout_len, (self.state_dim,), self.action_dim, self.device, gamma=self.gamma)
@@ -50,7 +64,6 @@ class PPOAgent:
             
         return action.cpu().numpy()[0], log_prob.cpu().item(), value.item()
 
-    
     def learn(self, last_v):
         """
         PPO Main Learning Loop
@@ -106,6 +119,11 @@ class PPOAgent:
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
                 self.optimizer.step()
+                
+            # Log Ratio stats (once per epoch to avoid spam, or mean)
+            if _ == 0:
+                 self.writer.add_scalar("Ratio/Mean", ratio.mean().item(), self.update_step)
+                 self.writer.add_scalar("Ratio/Max", ratio.max().item(), self.update_step)
 
         # Logging
         self.writer.add_scalar("Loss/Policy", policy_loss.item(), self.update_step)

@@ -4,14 +4,15 @@ import torch.nn.functional as F
 import numpy as np
 import random
 import os
-from models.networks import DuelingCNN
-from utils.buffers import ReplayBuffer
+from models.networks import QNetwork
+from utils.buffers import ReplayBuffer, PrioritizedReplayBuffer, NStepReplayBuffer
 
 class DQNAgent:
     def __init__(self, env, args, writer):
         self.device = torch.device(args.device)
         self.writer = writer
         self.env = env
+        self.dqn_type = args.dqn_type
         
         # Hyperparameters
         self.gamma = args.gamma
@@ -22,20 +23,48 @@ class DQNAgent:
         self.epsilon_decay = 100000
         self.learning_rate = args.lr
         self.learn_step_counter = 0
+        self.hidden_dim = args.hidden_dim_dqn
+        
+        # Flags based on dqn_type
+        self.use_double = self.dqn_type in ['double', 'rainbow']
+        self.use_dueling = self.dqn_type in ['dueling', 'rainbow']
+        self.use_per = self.dqn_type == 'rainbow'
+        self.use_n_step = self.dqn_type == 'rainbow'
         
         # Model
         self.action_dim = env.action_space.n
         input_shape = env.observation_space.shape # (4, 84, 84)
         
-        self.q_net = DuelingCNN(input_shape, self.action_dim).to(self.device)
-        self.target_net = DuelingCNN(input_shape, self.action_dim).to(self.device)
+        self.q_net = QNetwork(input_shape, self.action_dim, use_dueling=self.use_dueling, hidden_dim=self.hidden_dim).to(self.device)
+        self.target_net = QNetwork(input_shape, self.action_dim, use_dueling=self.use_dueling, hidden_dim=self.hidden_dim).to(self.device)
         self.target_net.load_state_dict(self.q_net.state_dict())
         self.target_net.eval()
         
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.learning_rate)
         
         # Buffer
-        self.buffer = ReplayBuffer(capacity=100000, state_shape=input_shape, device=self.device)
+        if self.use_per:
+            # Rainbow with 3-step
+            if self.use_n_step:
+                 # TODO: N-step wrapping logic is simpler if managed outside, 
+                 # but here we can wrap our PER buffer with NStep wrapper if we designed it that way
+                 # For simplicity in this structure: Separate N-step logic? 
+                 # Let's use NStepReplayBuffer which internally uses a standard ReplayBuffer
+                 # To combine PER + NStep, we need NStepBuffer to use PER.
+                 # Let's tweak this: if Rainbow, use PrioritizedReplayBuffer and handle n-step accumulation manually or via wrapper.
+                 # For now, let's just stick to PrioritizedReplayBuffer for Rainbow to keep it safe, 
+                 # AND add N-step if possible.
+                 pass
+            # For this implementations, lets use Prioritized Buffer for Rainbow
+            # And NStepReplayBuffer for n_step logic IF we want.
+            # Merging them: NStepReplayBuffer where self.buffer is PrioritizedReplayBuffer.
+            base_buffer = PrioritizedReplayBuffer(capacity=100000, state_shape=input_shape, device=self.device)
+            if self.use_n_step:
+                self.buffer = NStepReplayBuffer(capacity=100000, state_shape=input_shape, device=self.device, target_buffer=base_buffer, n_step=3, gamma=self.gamma)
+            else:
+                self.buffer = base_buffer
+        else:
+            self.buffer = ReplayBuffer(capacity=100000, state_shape=input_shape, device=self.device)
 
     def select_action(self, state, steps_done, eval_mode=False):
         # Epsilon-Greedy
@@ -60,31 +89,68 @@ class DQNAgent:
         self.learn_step_counter += 1
         
         # Sample
-        states, actions, rewards, next_states, dones = self.buffer.sample(self.batch_size)
+        if self.use_per:
+            states, actions, rewards, next_states, dones, weights, indices = self.buffer.sample(self.batch_size)
+        else:
+            states, actions, rewards, next_states, dones = self.buffer.sample(self.batch_size)
+            weights = torch.ones_like(rewards)
         
         # Current Q
         q_values = self.q_net(states)
         current_q = q_values.gather(1, actions)
         
-        # Double DQN Target
+        # Target Q
         with torch.no_grad():
-            next_actions = self.q_net(next_states).argmax(dim=1, keepdim=True)
-            next_target_q = self.target_net(next_states).gather(1, next_actions)
-            target_q = rewards + (1 - dones) * self.gamma * next_target_q
+            if self.use_double:
+                # Double DQN: action from Student, value from Teacher
+                next_actions = self.q_net(next_states).argmax(dim=1, keepdim=True)
+                next_target_q = self.target_net(next_states).gather(1, next_actions)
+            else:
+                # Vanilla DQN
+                next_target_q = self.target_net(next_states).max(dim=1, keepdim=True)[0]
+                
+            # N-step Gamma
+            gamma_val = (self.gamma ** 3) if (self.use_n_step and self.use_per) else self.gamma
+            target_q = rewards + (1 - dones) * gamma_val * next_target_q
             
         # Loss
-        loss = F.smooth_l1_loss(current_q, target_q)
+        loss_elementwise = F.smooth_l1_loss(current_q, target_q, reduction='none')
+        loss = (loss_elementwise * weights).mean()
         
+        # Optimize
         self.optimizer.zero_grad()
         loss.backward()
-        # Gradient Clipping
+        
+        # Log Gradient Norm
+        total_norm = 0.0
+        for p in self.q_net.parameters():
+            if p.grad is not None:
+                param_norm = p.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+        total_norm = total_norm ** 0.5
+        
         torch.nn.utils.clip_grad_norm_(self.q_net.parameters(), 10)
         self.optimizer.step()
         
+        # Update Priorities (PER)
+        if self.use_per:
+            td_errors = (target_q - current_q).abs().detach().cpu().numpy()
+            # If wrapped in NStepBuffer, accessing the inner buffer
+            if isinstance(self.buffer, NStepReplayBuffer):
+                self.buffer.buffer.update_priorities(indices, td_errors + 1e-6)
+            else:
+                self.buffer.update_priorities(indices, td_errors + 1e-6)
+
         # Logging
         if self.learn_step_counter % 100 == 0:
             self.writer.add_scalar("Loss/DQN", loss.item(), self.learn_step_counter)
             self.writer.add_scalar("Value/MeanQ", current_q.mean().item(), self.learn_step_counter)
+            self.writer.add_scalar("Gradients/Norm", total_norm, self.learn_step_counter)
+
+        # Log Custom: Network Weights (Histogram)
+        if self.learn_step_counter % 1000 == 0:
+            for name, param in self.q_net.named_parameters():
+                self.writer.add_histogram(f"Weights/{name}", param, self.learn_step_counter)
 
         # Update Target Net
         if self.learn_step_counter % self.target_update_freq == 0:

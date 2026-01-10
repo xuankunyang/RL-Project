@@ -4,10 +4,12 @@ import torch.nn.functional as F
 import numpy as np
 
 # --- 1. Atari Visual Network (Dueling Architecture) ---
-class DuelingCNN(nn.Module):
-    def __init__(self, input_shape, num_actions):
-        super(DuelingCNN, self).__init__()
+# --- 1. Atari Visual Network (Configurable Dueling) ---
+class QNetwork(nn.Module):
+    def __init__(self, input_shape, num_actions, use_dueling=True, hidden_dim=512):
+        super(QNetwork, self).__init__()
         c, h, w = input_shape
+        self.use_dueling = use_dueling
         
         # 经典的 Nature DQN 卷积层
         self.features = nn.Sequential(
@@ -27,27 +29,37 @@ class DuelingCNN(nn.Module):
         convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h, 8, 4), 4, 2), 3, 1)
         linear_input_size = convw * convh * 64
         
-        # Dueling Network: 分为 Value 和 Advantage 两路
-        self.fc_value = nn.Sequential(
-            nn.Linear(linear_input_size, 512),
-            nn.ReLU(),
-            nn.Linear(512, 1)
-        )
-        self.fc_advantage = nn.Sequential(
-            nn.Linear(linear_input_size, 512),
-            nn.ReLU(),
-            nn.Linear(512, num_actions)
-        )
+        if self.use_dueling:
+            # Dueling Network: 分为 Value 和 Advantage 两路
+            self.fc_value = nn.Sequential(
+                nn.Linear(linear_input_size, hidden_dim),
+                nn.ReLU(),
+                nn.Linear(hidden_dim, 1)
+            )
+            self.fc_advantage = nn.Sequential(
+                nn.Linear(linear_input_size, hidden_dim),
+                nn.ReLU(),
+                nn.Linear(hidden_dim, num_actions)
+            )
+        else:
+            # Standard DQN
+            self.fc = nn.Sequential(
+                nn.Linear(linear_input_size, hidden_dim),
+                nn.ReLU(),
+                nn.Linear(hidden_dim, num_actions)
+            )
 
     def forward(self, x):
         x = self.features(x)
         x = x.view(x.size(0), -1)
         
-        value = self.fc_value(x)
-        advantage = self.fc_advantage(x)
-        
-        # Q = V + (A - mean(A))
-        return value + advantage - advantage.mean(1, keepdim=True)
+        if self.use_dueling:
+            value = self.fc_value(x)
+            advantage = self.fc_advantage(x)
+            # Q = V + (A - mean(A))
+            return value + advantage - advantage.mean(1, keepdim=True)
+        else:
+            return self.fc(x)
 
 # --- 2. MuJoCo Policy Network (Continuous) ---
 class GaussianPolicy(nn.Module):
