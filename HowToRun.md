@@ -5,18 +5,26 @@ I have integrated the RL framework, implemented DQN (for Atari) and PPO (for MuJ
 ## 1. Project Structure
 ```
 RL-Project/
-├── agents/
-│   ├── dqn_agent.py       # [MODIFIED] DQN Agent (Supports Vanilla, Double, Dueling, Rainbow)
-│   └── ppo_agent.py       # [MODIFIED] PPO Agent (Separate LRs, Configurable Clip)
-├── models/
-│   └── networks.py        # [MODIFIED] Configurable QNetwork & GaussianPolicy
-├── utils/
-│   ├── buffers.py         # [MODIFIED] ReplayBuffer, PrioritizedReplayBuffer, NStepReplayBuffer, RolloutBuffer
-│   └── wrappers.py        # Environment Wrappers (Atari & MuJoCo)
-├── scripts/
-│   └── run_param_search.ps1 # [MODIFIED] Distributed Parameter Search Script (Covers all variants)
-├── run.py                 # [MODIFIED] Main Training Entry Point
-└── requirements.txt       # Dependencies
+├── agents/ ...
+├── models/ ...
+├── utils/ ...
+├── scripts/ ...
+├── results/               
+│   ├── Atari/
+│   │   └── BreakoutNoFrameskip-v4/
+│   │       ├── DQN_Vanilla/
+│   │       │   └── lr3e-4_.../  # Run Folder
+│   │       ├── DQN_Double/
+│   │       ├── DQN_Dueling/
+│   │       └── DQN_Rainbow/
+│   └── MuJoCo/
+│       └── HalfCheetah-v4/
+│           ├── PPO_Standard/
+│           │   └── ...
+│           └── PPO_NoClip/
+│               └── ...
+├── run.py                 
+└── requirements.txt       
 ```
 
 ## 2. How to Run
@@ -48,6 +56,14 @@ This distributes jobs across your 4 GPUs.
 
 ## 3. Algorithm Details & Logging
 
+### Output & Logging
+- **Directory Structure**: `results/Region/Environment/Variant/Hyperparams_Timestamp/`
+    - **Region**: Atari / MuJoCo
+    - **Environment**: e.g., BreakoutNoFrameskip-v4
+    - **Variant**: DQN_Vanilla, DQN_Double, PPO_Standard, etc.
+- **Log File**: `log.txt` inside the run folder.
+- **Models**: `models/` subdirectory.
+
 ### DQN Variants (`--dqn_type`)
 - **`dqn`**: Standard Nature DQN.
 - **`double`**: Double Q-Learning (Reduces overestimation).
@@ -55,15 +71,8 @@ This distributes jobs across your 4 GPUs.
 - **`rainbow`**: Combines Double + Dueling + PER + N-Step.
 
 ### PPO Variants
-- **Separate LRs**: Use `--lr_actor` and `--lr_critic` to tune them independently.
-- **Clipping**: Use `--ppo_clip`. Set to a large value (e.g., 10.0) to disable clipping effects.
-
-### Enhanced Logging
-- **`Value/MeanQ`**: Tracks average Q-values (DQN).
-- **`Weights/*`**: Histograms of network weights.
-- **`Gradients/Norm`**: Gradient norms.
-- **`Train/EpisodeReward`**: Live episode return during training.
-- **`Ratio/Mean` & `Ratio/Max`**: (PPO) Monitor importance sampling ratios to see if clipping is active (Standard PPO usually has max < 1.3, No-Clip can go huge).
+- **Separate LRs**: Use `--lr_actor` and `--lr_critic`.
+- **Clipping**: Use `--ppo_clip`.
 
 ## 4. Key Parameters
 | Parameter | Default | Description |
@@ -73,8 +82,10 @@ This distributes jobs across your 4 GPUs.
 | `--lr_actor` | `None` | Actor LR (PPO). Defaults to --lr. |
 | `--lr_critic` | `None` | Critic LR (PPO). Defaults to --lr. |
 | `--ppo_clip` | `0.2` | PPO Clipping range. |
+| `--hidden_dim_dqn` | `512` | Hidden dim for DQN. |
+| `--hidden_dim_ppo` | `256` | Hidden dim for PPO. |
 
 ## 5. Verification
 Verified on local CPU:
 - **All DQN Variants** ran successfully.
-- **PPO** ran successfully with new arguments.
+- **PPO** ran successfully.

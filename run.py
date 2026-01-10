@@ -80,23 +80,65 @@ def main():
     
     args = parser.parse_args()
 
-    # Default LRs logic
-    if args.lr_actor is None: args.lr_actor = args.lr
-    if args.lr_critic is None: args.lr_critic = args.lr
-
-    # 1. 初始化 Log 目录
-    # 如果是 DQN，在 log 中加入 type
+    # === Log Directory Construction ===
+    # 1. Domain & Envnironment
     if args.algo == 'dqn':
-        algo_name = f"{args.algo}_{args.dqn_type}"
+        domain = "Atari"
+        # Variant Name (Folder Level)
+        if args.dqn_type == 'dqn':
+             variant = "DQN_Vanilla"
+        elif args.dqn_type == 'double':
+             variant = "DQN_Double"
+        elif args.dqn_type == 'dueling':
+             variant = "DQN_Dueling"
+        elif args.dqn_type == 'rainbow':
+             variant = "DQN_Rainbow"
+        else:
+             variant = f"DQN_{args.dqn_type}"
+             
+        # Key Hyperparams for run folder
+        hp_str = f"lr{args.lr}_sd{args.seed}_bs{args.batch_size}"
     else:
-        # PPO: Include Clip info if non-standard
-        algo_name = f"{args.algo}"
-        if args.ppo_clip > 0.5: # Assuming > 0.5 means "No Clip" experiment
-             algo_name += "_noclip"
+        domain = "MuJoCo"
+        # Variant Name (Folder Level)
+        if args.ppo_clip > 0.5: 
+             variant = "PPO_NoClip"
+        else:
+             variant = "PPO_Standard"
         
-    log_dir = f"results/{algo_name}_{args.env_name}_{args.exp_name}_{args.seed}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        hp_str = f"lra{args.lr_actor}_lrc{args.lr_critic}_clp{args.ppo_clip}_sd{args.seed}"
+
+    # 2. Timestamp
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    
+    # 3. Final Path: results/Domain/Env/Variant/Params_Timestamp
+    log_dir = os.path.join("results", domain, args.env_name, variant, f"{hp_str}_{timestamp}")
+    model_dir = os.path.join(log_dir, "models")
+    
+    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(model_dir, exist_ok=True)
+
+    # === Logging Setup ===
+    # Setup simple logging to file and console
+    import logging
+    log_file = os.path.join(log_dir, "log.txt")
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
+        ]
+    )
+    logger = logging.getLogger()
+    
+    # Log Arguments
+    logger.info(f"Arguments: {args}")
+    logger.info(f"Log Directory: {log_dir}")
+    logger.info(f"Model Directory: {model_dir}")
+    
     writer = SummaryWriter(log_dir)
-    print(f"Starting training on {args.device} | Log dir: {log_dir}")
 
     # 2. 环境选择与 Agent 初始化
     if args.algo == 'dqn':
@@ -127,6 +169,7 @@ def main():
             state = next_state
             if done or truncated:
                 writer.add_scalar("Train/EpisodeReward", current_ep_reward, global_step)
+                logger.info(f"Step {global_step} | Train Reward: {current_ep_reward:.2f}")
                 current_ep_reward = 0
                 state, _ = env.reset()
             
@@ -146,6 +189,7 @@ def main():
             
             if done or truncated:
                 writer.add_scalar("Train/EpisodeReward", current_ep_reward, global_step)
+                logger.info(f"Step {global_step} | Train Reward: {current_ep_reward:.2f}")
                 current_ep_reward = 0
                 state, _ = env.reset()
             
@@ -157,25 +201,26 @@ def main():
 
         # --- Logging ---
         if global_step % 1000 == 0:
-            print(f"[{args.algo.upper()}] Step {global_step}/{args.total_timesteps}")
+            # logger.info(f"Step {global_step}/{args.total_timesteps}") # Reduced verbosity as we log ep reward
+            pass
 
         # --- Evaluation ---
         if global_step % args.eval_freq == 0:
             mean_ret, std_ret = evaluate(agent, args.env_name, args.algo, args.seed)
             writer.add_scalar("Eval/MeanReward", mean_ret, global_step)
-            print(f"Step {global_step} | Eval Reward: {mean_ret:.2f} +/- {std_ret:.2f}")
+            logger.info(f"Step {global_step} | Eval Reward: {mean_ret:.2f} +/- {std_ret:.2f}")
             
             # Save Model
             torch.save(agent.__dict__.get('q_net', agent.__dict__.get('policy')).state_dict(), 
-                       os.path.join(log_dir, f"model_{global_step}.pth"))
+                       os.path.join(model_dir, f"model_{global_step}.pth"))
 
     # 4. 保存最终模型
     torch.save(agent.__dict__.get('q_net', agent.__dict__.get('policy')).state_dict(), 
-               os.path.join(log_dir, "final_model.pth"))
+               os.path.join(model_dir, "final_model.pth"))
     
     env.close()
     writer.close()
-    print("Training Finished!")
+    logger.info("Training Finished!")
 
 if __name__ == "__main__":
     main()
