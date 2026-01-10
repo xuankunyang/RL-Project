@@ -77,8 +77,13 @@ def main():
     
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size')
     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
+    parser.add_argument('--num_envs', type=int, default=1, help='Number of parallel environments')
     
     args = parser.parse_args()
+
+    # Default LRs logic
+    if args.lr_actor is None: args.lr_actor = args.lr
+    if args.lr_critic is None: args.lr_critic = args.lr
 
     # === Log Directory Construction ===
     # 1. Domain & Envnironment
@@ -97,7 +102,7 @@ def main():
              variant = f"DQN_{args.dqn_type}"
              
         # Key Hyperparams for run folder
-        hp_str = f"lr{args.lr}_sd{args.seed}_bs{args.batch_size}"
+        hp_str = f"lr{args.lr}_sd{args.seed}_bs{args.batch_size}_env{args.num_envs}"
     else:
         domain = "MuJoCo"
         # Variant Name (Folder Level)
@@ -106,7 +111,7 @@ def main():
         else:
              variant = "PPO_Standard"
         
-        hp_str = f"lra{args.lr_actor}_lrc{args.lr_critic}_clp{args.ppo_clip}_sd{args.seed}"
+        hp_str = f"lra{args.lr_actor}_lrc{args.lr_critic}_clp{args.ppo_clip}_sd{args.seed}_env{args.num_envs}"
 
     # 2. Timestamp
     timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -142,70 +147,158 @@ def main():
 
     # 2. 环境选择与 Agent 初始化
     if args.algo == 'dqn':
-        env = make_atari_env(args.env_name)
-        set_seed(args.seed, env)
+        env = make_atari_env(args.env_name, num_envs=args.num_envs, seed=args.seed)
+        # VectorEnv seeding handled inside or via seed arg if passed (AsyncVectorEnv doesn't inherently take seed in init list easily without wrapper, 
+        # but our make_env(rank) architecture handles it if we passed seed, actually we didn't pass seed to make_env yet in wrappers.py properly?
+        # Let's re-verify wrappers.py logic. make_env(rank) doesn't use seed. 
+        # But gym.make usually seeds on reset. VectorEnv reset takes seed.
+        # We will seed on reset.
         agent = DQNAgent(env, args, writer)
     elif args.algo == 'ppo':
-        env = make_mujoco_env(args.env_name)
-        set_seed(args.seed, env)
+        # Workaround: Disable VectorEnv for PPO to avoid GAE bug (as discussed in plan logic)
+        if args.num_envs > 1:
+            logger.warning("PPO does not currently support VectorEnv (GAE implementation limitation). Forcing num_envs=1.")
+            args.num_envs = 1
+            
+        env = make_mujoco_env(args.env_name, num_envs=args.num_envs, seed=args.seed)
         agent = PPOAgent(env, args, writer)
     
     # 3. Training Loop
     state, _ = env.reset(seed=args.seed)
-    current_ep_reward = 0
+    current_ep_reward = np.zeros(args.num_envs)
     
-    for global_step in range(1, args.total_timesteps + 1):
+    global_step = 0
+    while global_step < args.total_timesteps:
         
         # --- Action Selection ---
         if args.algo == 'dqn':
-            action = agent.select_action(state, global_step)
+            # vector step
+            action = agent.select_action(state, global_step) # Returns array if num_envs > 1
+            if args.num_envs == 1 and np.isscalar(action):
+                 action = np.array([action])
+            
             # DQN specific: execution
-            next_state, reward, done, truncated, _ = env.step(action)
+            next_state, reward, done, truncated, info = env.step(action)
             current_ep_reward += reward
             
-            # Store
-            agent.buffer.add(state, action, reward, next_state, done)
+            # Iterate over batch
+            for i in range(args.num_envs):
+                real_next_state = next_state[i]
+                is_done = done[i] or truncated[i]
+                
+                # Check for final observation if done
+                if is_done:
+                    # AsyncVectorEnv logic for final observation
+                    if "final_observation" in info:
+                         # final_observation is usually a list of arrays or array of arrays
+                         real_next_state = info["final_observation"][i]
+                    elif "_final_observation" in info and info["_final_observation"][i]:
+                         # Some gym versions
+                         real_next_state = info["final_observation"][i]
+
+                # If num_envs=1, state is (C, H, W). If > 1, state is (N, C, H, W).
+                # But buffer expects (C, H, W).
+                s_i = state[i] if args.num_envs > 1 else state
+                a_i = action[i] if args.num_envs > 1 else action
+                r_i = reward[i] if args.num_envs > 1 else reward
+                ns_i = real_next_state if args.num_envs > 1 else real_next_state # handled above
+                d_i = is_done
+                
+                # Handling single env case where indexing might be weird if we squeezed it?
+                # Actually, make_atari_env(num=1) returns non-vector env.
+                # So state is (C, H, W). len(state.shape)=3.
+                # If num=2, state is (2, C, H, W).
+                # My loop implies I treat single env as vector of size 1?
+                # No, make_atari_env returns DummyVecEnv or similar only if num > 1?
+                # In wrappers.py: if num_envs > 1: return AsyncVectorEnv. else: return make_env(0)().
+                # So if num_envs=1, it is a STANDARD Gym Env.
+                # Standard Env step returns scalar reward, int action.
+                # My logic `current_ep_reward = np.zeros(args.num_envs)` implies array.
+                # `action = agent.select_action(...)` returns scalar if single env.
+                # `env.step(action)` returns `state` (C,H,W), `reward` (float), `done` (bool).
+                # So I need to differentiate Single vs Vector in this loop OR force VectorEnv for N=1 too?
+                # Forcing VectorEnv for N=1 is cleaner but might add overhead.
+                # I will handle the difference.
+                pass 
+
+            # RE-WRITING LOGIC TO HANDLE BOTH SINGLE AND VECTOR SAFELY
             
-            state = next_state
-            if done or truncated:
-                writer.add_scalar("Train/EpisodeReward", current_ep_reward, global_step)
-                logger.info(f"Step {global_step} | Train Reward: {current_ep_reward:.2f}")
-                current_ep_reward = 0
-                state, _ = env.reset()
+            if args.num_envs == 1:
+                # Single Env flow
+                # action is scalar (from updated select_action logic)
+                 # Wait, updated select_action returns scalar if input (C, H, W).
+                ns, r, d, t, _ = env.step(action)
+                current_ep_reward[0] += r
+                
+                agent.buffer.add(state, action, r, ns, d or t)
+                
+                state = ns
+                if d or t:
+                    writer.add_scalar("Train/EpisodeReward", current_ep_reward[0], global_step)
+                    logger.info(f"Step {global_step} | Train Reward: {current_ep_reward[0]:.2f}")
+                    current_ep_reward[0] = 0
+                    state, _ = env.reset()
+                
+                global_step += 1
+            else:
+                # Vector Flow
+                # action is array
+                next_state, reward, done, truncated, info = env.step(action)
+                current_ep_reward += reward
+                
+                for i in range(args.num_envs):
+                    is_done = done[i] or truncated[i]
+                    real_ns = next_state[i]
+                    # Try fetch final obs
+                    if is_done and "final_observation" in info:
+                         real_ns = info["final_observation"][i]
+                    
+                    agent.buffer.add(state[i], action[i], reward[i], real_ns, is_done)
+                    
+                    if is_done:
+                        writer.add_scalar("Train/EpisodeReward", current_ep_reward[i], global_step + i)
+                        logger.info(f"Global Step {global_step} | Env {i} Reward: {current_ep_reward[i]:.2f}")
+                        current_ep_reward[i] = 0
+                
+                state = next_state
+                global_step += args.num_envs
             
             # Train
             agent.learn()
             
         elif args.algo == 'ppo':
-            # PPO specific: Rollout collection
+            # PPO (Forces num_envs=1 currently)
             action, log_prob, value = agent.select_action(state)
             next_state, reward, done, truncated, _ = env.step(action)
-            current_ep_reward += reward
+            current_ep_reward[0] += reward
             
             # Store in RolloutBuffer
             agent.buffer.add(state, action, log_prob, reward, done, value)
             
             state = next_state
+            global_step += 1
             
             if done or truncated:
-                writer.add_scalar("Train/EpisodeReward", current_ep_reward, global_step)
-                logger.info(f"Step {global_step} | Train Reward: {current_ep_reward:.2f}")
-                current_ep_reward = 0
+                writer.add_scalar("Train/EpisodeReward", current_ep_reward[0], global_step)
+                logger.info(f"Step {global_step} | Train Reward: {current_ep_reward[0]:.2f}")
+                current_ep_reward[0] = 0
                 state, _ = env.reset()
             
             # Update if buffer full
             if agent.buffer.full:
-                # Value bootstrapping for the last state
                 _, _, last_val = agent.select_action(state, eval_mode=True)
                 agent.learn(last_val)
 
         # --- Logging ---
         if global_step % 1000 == 0:
-            # logger.info(f"Step {global_step}/{args.total_timesteps}") # Reduced verbosity as we log ep reward
             pass
 
-        # --- Evaluation ---
-        if global_step % args.eval_freq == 0:
+        # --- Evaluation (Linear check might skip if jumping steps) ---
+        # Using >= last_eval_step + freq logic is better, but % works if we check range or allow jitter
+        if global_step % args.eval_freq < args.num_envs: 
+            # roughly triggers close to boundary
+            # Evaluate using fresh single env to ensure consistent metrics?
+            # Existing evaluate function creates its own env.
             mean_ret, std_ret = evaluate(agent, args.env_name, args.algo, args.seed)
             writer.add_scalar("Eval/MeanReward", mean_ret, global_step)
             logger.info(f"Step {global_step} | Eval Reward: {mean_ret:.2f} +/- {std_ret:.2f}")

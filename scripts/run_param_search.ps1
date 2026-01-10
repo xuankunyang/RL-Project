@@ -9,7 +9,6 @@ $devices = @("cuda:0", "cuda:1", "cuda:2", "cuda:3")
 
 # Common settings
 $timesteps = 2000000 # Increased for better convergence comparison
-$base_cmd = "python run.py"
 
 $job_id = 0
 
@@ -23,9 +22,10 @@ foreach ($algo in $algos) {
                     $device = $devices[$job_id % $devices.Length]
                     $exp_name = "search_${dtype}_lr${lr}"
                     
-                    $cmd_args = "--algo dqn --dqn_type $dtype --env_name $env --lr $lr --seed $seed --device $device --total_timesteps $timesteps --exp_name $exp_name"
+                    # Use 8 envs for DQN on server
+                    $cmd_args = "--algo dqn --dqn_type $dtype --env_name $env --lr $lr --seed $seed --num_envs 8 --device $device --total_timesteps $timesteps --exp_name $exp_name"
                     
-                    Write-Host "Starting Job $job_id on $device: DQN-$dtype | LR: $lr | Seed: $seed"
+                    Write-Host "Starting Job $job_id on $device : DQN-$dtype | LR: $lr | Seed: $seed | Envs: 8"
                     Start-Process python -ArgumentList $cmd_args -NoNewWindow
                     $job_id++
                     Start-Sleep -Seconds 2
@@ -55,7 +55,7 @@ foreach ($algo in $algos) {
                     # Assuming lr_actor = lr_critic = lr for this search
                     $cmd_args = "--algo ppo --env_name $env --lr $lr --ppo_clip $clip --seed $seed --device $device --total_timesteps $timesteps --exp_name $exp_name"
                     
-                    Write-Host "Starting Job $job_id on $device: PPO (Clip $clip) | LR: $lr | Seed: $seed"
+                    Write-Host "Starting Job $job_id on $device : PPO (Clip $clip) | LR: $lr | Seed: $seed"
                     Start-Process python -ArgumentList $cmd_args -NoNewWindow
                     $job_id++
                     Start-Sleep -Seconds 2

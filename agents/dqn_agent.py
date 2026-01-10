@@ -32,8 +32,12 @@ class DQNAgent:
         self.use_n_step = self.dqn_type == 'rainbow'
         
         # Model
-        self.action_dim = env.action_space.n
-        input_shape = env.observation_space.shape # (4, 84, 84)
+        if hasattr(env, "single_action_space"):
+            self.action_dim = env.single_action_space.n
+            input_shape = env.single_observation_space.shape
+        else:
+            self.action_dim = env.action_space.n
+            input_shape = env.observation_space.shape # (4, 84, 84)
         
         self.q_net = QNetwork(input_shape, self.action_dim, use_dueling=self.use_dueling, hidden_dim=self.hidden_dim).to(self.device)
         self.target_net = QNetwork(input_shape, self.action_dim, use_dueling=self.use_dueling, hidden_dim=self.hidden_dim).to(self.device)
@@ -74,13 +78,33 @@ class DQNAgent:
             epsilon = self.epsilon_final + (self.epsilon_start - self.epsilon_final) * \
                       np.exp(-1. * steps_done / self.epsilon_decay)
         
+        # Check if state is batched (N, C, H, W) or single (C, H, W)
+        # We assume VectorEnv returns (N, C, H, W) as numpy array
+        if len(state.shape) == 3:
+             # Single env case: add batch dim -> (1, C, H, W)
+             state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+             scalar_output = True
+        else:
+             # Batched case: (N, C, H, W)
+             state_t = torch.FloatTensor(state).to(self.device)
+             scalar_output = False
+        
         if not eval_mode and random.random() < epsilon:
-            return self.env.action_space.sample()
+            # Random Action
+            if scalar_output:
+                return self.env.action_space.sample() # Scalar
+            else:
+                batch_size = state.shape[0]
+                return np.random.randint(0, self.action_dim, size=(batch_size,)) # Array (N,)
         else:
             with torch.no_grad():
-                state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
                 q_values = self.q_net(state_t)
-                return q_values.argmax(dim=1).item()
+                actions = q_values.max(1)[1].cpu().numpy() # Return (N,)
+            
+            if scalar_output:
+                return actions[0] # Return scalar int
+            else:
+                return actions # Return batch array (N,)
 
     def learn(self):
         if self.buffer.size < self.batch_size:

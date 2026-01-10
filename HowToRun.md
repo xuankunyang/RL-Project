@@ -10,19 +10,8 @@ RL-Project/
 ├── utils/ ...
 ├── scripts/ ...
 ├── results/               
-│   ├── Atari/
-│   │   └── BreakoutNoFrameskip-v4/
-│   │       ├── DQN_Vanilla/
-│   │       │   └── lr3e-4_.../  # Run Folder
-│   │       ├── DQN_Double/
-│   │       ├── DQN_Dueling/
-│   │       └── DQN_Rainbow/
-│   └── MuJoCo/
-│       └── HalfCheetah-v4/
-│           ├── PPO_Standard/
-│           │   └── ...
-│           └── PPO_NoClip/
-│               └── ...
+│   ├── Atari/ ...
+│   └── MuJoCo/ ...
 ├── run.py                 
 └── requirements.txt       
 ```
@@ -31,8 +20,12 @@ RL-Project/
 
 ### Single Experiment (Debug / Test)
 ```bash
-# Vanilla DQN
+# Vanilla DQN (Single Core)
 python run.py --algo dqn --dqn_type dqn --env_name BreakoutNoFrameskip-v4 --seed 42 --device cuda:0
+
+# DQN with Vectorized Environments (Speed Up!)
+# Uses 8 CPU cores to collect data in parallel
+python run.py --algo dqn --dqn_type dqn --env_name BreakoutNoFrameskip-v4 --num_envs 8 --device cuda:0
 
 # Double DQN
 python run.py --algo dqn --dqn_type double --env_name BreakoutNoFrameskip-v4 --seed 42 --device cuda:0
@@ -58,9 +51,6 @@ This distributes jobs across your 4 GPUs.
 
 ### Output & Logging
 - **Directory Structure**: `results/Region/Environment/Variant/Hyperparams_Timestamp/`
-    - **Region**: Atari / MuJoCo
-    - **Environment**: e.g., BreakoutNoFrameskip-v4
-    - **Variant**: DQN_Vanilla, DQN_Double, PPO_Standard, etc.
 - **Log File**: `log.txt` inside the run folder.
 - **Models**: `models/` subdirectory.
 
@@ -74,6 +64,11 @@ This distributes jobs across your 4 GPUs.
 - **Separate LRs**: Use `--lr_actor` and `--lr_critic`.
 - **Clipping**: Use `--ppo_clip`.
 
+### Performance Optimization
+- **`--num_envs N`**: Use N parallel environments to speed up data collection on multi-core CPUs.
+  - Highly recommended for **DQN** on Atari (e.g., set to 8 or 16).
+  - Note: PPO typically works better with synced vector envs which support GAE properly. My simplified PPO buffer currently supports single-stream data, so stick to `num_envs=1` for PPO correctness or upgrade buffer logic.
+
 ## 4. Key Parameters
 | Parameter | Default | Description |
 | :--- | :--- | :--- |
@@ -82,6 +77,7 @@ This distributes jobs across your 4 GPUs.
 | `--lr_actor` | `None` | Actor LR (PPO). Defaults to --lr. |
 | `--lr_critic` | `None` | Critic LR (PPO). Defaults to --lr. |
 | `--ppo_clip` | `0.2` | PPO Clipping range. |
+| `--num_envs` | `1` | Number of parallel envs (DQN). |
 | `--hidden_dim_dqn` | `512` | Hidden dim for DQN. |
 | `--hidden_dim_ppo` | `256` | Hidden dim for PPO. |
 

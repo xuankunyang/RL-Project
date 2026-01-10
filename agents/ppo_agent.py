@@ -26,8 +26,12 @@ class PPOAgent:
         self.rollout_len = 2048 # PPO typically collects a large batch
         
         # Model
-        self.state_dim = env.observation_space.shape[0]
-        self.action_dim = env.action_space.shape[0]
+        if hasattr(env, "single_observation_space"):
+             self.state_dim = env.single_observation_space.shape[0]
+             self.action_dim = env.single_action_space.shape[0]
+        else:
+             self.state_dim = env.observation_space.shape[0]
+             self.action_dim = env.action_space.shape[0]
         
         self.policy = GaussianPolicy(self.state_dim, self.action_dim, hidden_dim=self.hidden_dim).to(self.device)
         
@@ -50,8 +54,17 @@ class PPOAgent:
         self.update_step = 0
 
     def select_action(self, state, eval_mode=False):
+        # Check for batch dim
+        if len(state.shape) == self.env.observation_space.shape[0]: # Single (dim, ) 
+             # Gymnasium VectorEnv returns (N, dim) for flat or (N, C, H, W) for image
+             # Standard MuJoCo state is (dim,)
+             is_batched = False
+             state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        else:
+             is_batched = True
+             state_t = torch.FloatTensor(state).to(self.device)
+
         with torch.no_grad():
-            state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             dist = self.policy.get_action(state_t)
             value = self.policy(state_t)
             
@@ -61,8 +74,13 @@ class PPOAgent:
                 action = dist.sample()
                 
             log_prob = dist.log_prob(action).sum(dim=-1)
-            
-        return action.cpu().numpy()[0], log_prob.cpu().item(), value.item()
+        
+        if is_batched:
+            # Return arrays: action (N, A), log_prob (N,), value (N,)
+            return action.cpu().numpy(), log_prob.cpu().numpy(), value.cpu().numpy().flatten()
+        else:
+            # Return scalars
+            return action.cpu().numpy()[0], log_prob.cpu().item(), value.item()
 
     def learn(self, last_v):
         """
