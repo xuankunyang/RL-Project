@@ -32,7 +32,14 @@ def make_atari_env(env_name):
 
 
 def make_mujoco_env(env_name):
-    # MuJoCo 通常只需要归一化 Observation，这里简单起见直接返回
-    # 如果要做得更好，可以加 NormalizeObservation wrapper
+    # MuJoCo 通常需要 Observation 和 Reward 的归一化以获得更好的 PPO 性能
     env = gym.make(env_name, render_mode="rgb_array")
+    
+    # 归一化 Observation
+    env = gym.wrappers.NormalizeObservation(env)
+    
+    # 归一化 Reward 和 Clip
+    env = gym.wrappers.NormalizeReward(env)
+    env = gym.wrappers.TransformReward(env, lambda r: np.clip(r, -10, 10))
+    
     return env
