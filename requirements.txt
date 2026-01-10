@@ -1,0 +1,24 @@
+# === Reinforcement Learning Environments ===
+# Gymnasium 是 Gym 的现代维护版，完全兼容
+gymnasium[atari,accept-rom-license,mujoco,other]>=0.29.0
+ale-py>=0.8.1  # Atari 模拟器核心
+mujoco>=2.3.7  # DeepMind 原生 MuJoCo 绑定 (无需旧版 Key)
+
+# === Data Processing & Utilities ===
+numpy>=1.24.0
+pandas>=2.0.0
+scipy
+torch>=2.5.1
+torchvision
+torchaudio
+
+# === Visualization & Logging ===
+matplotlib
+seaborn       # 也就是画图更好看，适合做Report
+tensorboard   # 实验记录必备
+tqdm          # 进度条，看训练进度很方便
+imageio       # 用于保存Agent玩游戏的视频
+moviepy       # 视频处理
+
+# === Argument Parsing ===
+# (Python 3 自带 argparse，不需要额外安装，但列出来作为提醒)
