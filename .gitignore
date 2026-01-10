@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# RL
+logs/
+checkpoints/
+videos/
+
+# System
+.DS_Store
