@@ -75,9 +75,9 @@ def main():
     parser.add_argument('--lr_critic', type=float, default=None, help='Critic Learning rate (if None, use --lr)')
     parser.add_argument('--ppo_clip', type=float, default=0.2, help='PPO Clip range')
     
-    parser.add_argument('--batch_size', type=int, default=64, help='Batch size')
+    parser.add_argument('--batch_size', type=int, default=512, help='Batch size')
     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
-    parser.add_argument('--num_envs', type=int, default=1, help='Number of parallel environments')
+    parser.add_argument('--num_envs', type=int, default=4, help='Number of parallel environments')
     
     args = parser.parse_args()
 
