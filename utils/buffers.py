@@ -57,11 +57,11 @@ class RolloutBuffer:
             raise ValueError("Buffer is full!")
             
         self.states[self.ptr] = torch.FloatTensor(state).to(self.device)
-        self.actions[self.ptr] = action
-        self.log_probs[self.ptr] = log_prob
+        self.actions[self.ptr] = torch.FloatTensor(action).to(self.device)
+        self.log_probs[self.ptr] = torch.FloatTensor([log_prob]).to(self.device)
         self.rewards[self.ptr] = torch.FloatTensor([reward]).to(self.device)
         self.dones[self.ptr] = torch.FloatTensor([done]).to(self.device)
-        self.values[self.ptr] = value
+        self.values[self.ptr] = torch.FloatTensor([value]).to(self.device)
         
         self.ptr += 1
         if self.ptr == self.max_size:

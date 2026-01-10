@@ -1,4 +1,5 @@
 import gymnasium as gym
+import numpy as np
 import ale_py  # Register ALE environments
 from gymnasium.wrappers import (
     AtariPreprocessing,

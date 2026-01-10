@@ -50,45 +50,6 @@ class PPOAgent:
             
         return action.cpu().numpy()[0], log_prob.cpu().item(), value.item()
 
-    def update(self):
-        # 1. Compute Returns and Advantages
-        with torch.no_grad():
-            # 需要最后一个 state 的 value 来 bootstrapping
-            # 这里简单起见，假设最后一步 done=False 的 value 预估。
-            # 实际上在 run.py 收集循环结束时，我们应该传入最后一步的 observation
-            pass 
-        
-        # 注意: PPO 的 update 通常是在外部收集完数据后调用。
-        # 这里我们假设外部已经调用了 buffer.compute_gae_and_returns(last_value)
-        
-        # 2. Training Loop
-        advantages, returns = self.buffer.compute_gae_and_returns(0) # Placeholder: last_value should be passed in
-        # Normalize advantages
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-        
-        for _ in range(self.ppo_epoch):
-            data_generator = self.buffer.get_batches(self.batch_size)
-            
-            for sample in data_generator:
-                states, actions, old_log_probs, values, _ = sample
-                
-                # Calculate new log probs and values
-                dist = self.policy.get_action(states)
-                new_log_probs = dist.log_prob(actions).sum(dim=-1, keepdim=True)
-                entropy = dist.entropy().mean()
-                new_values = self.policy(states)
-                
-                # Probs ratio
-                ratio = torch.exp(new_log_probs - old_log_probs.view(-1, 1))
-                
-                # Surrogate Loss
-                curr_advantages = advantages[_] # This is wrong, need to index correctly
-                # Re-indexing inside the loop
-                # The generator yields sliced batches, so we need to slice advantages & returns too
-                pass 
-
-        # 由于 PPO logic 比较依赖 batch loop，下面重写一下完整的 update 逻辑，不依赖 generator 的 slice 隐式匹配
-        pass
     
     def learn(self, last_v):
         """
