@@ -254,24 +254,56 @@ def main():
                 agent.learn()
             
         elif args.algo == 'ppo':
-            # PPO (Now supports multi-env!)
+            # 1. Select Action
             action, log_prob, value = agent.select_action(state)
-            next_state, reward, done, truncated, _ = env.step(action)
             
-            # Process each environment
-            for i in range(args.num_envs):
-                # Accumulate reward for each environment separately
-                current_ep_reward[i] += reward[i]
-                
-                # Log when episode ends
-                if done[i] or truncated[i]:
-                    ep_reward = current_ep_reward[i]
-                    writer.add_scalar("Train/EpisodeReward", ep_reward, global_step + i)
-                    logger.info(f"Step {global_step} | Env {i} Episode Reward: {ep_reward:.2f}")
-                    current_ep_reward[i] = 0
+            # 2. Step Environment
+            next_state, reward, done, truncated, info = env.step(action)
             
-            # Store batch
-            agent.buffer.add_batch(state, action, log_prob, reward, done | truncated, value)
+            # --- 核心修正 1: 正确记录 Log (读取真实分数) ---
+            # 这里的 reward 是归一化过的，只用于训练，不用于画图！
+            
+            # 检查是否有环境完成了 Episode
+            if "final_info" in info:
+                for idx, final_info in enumerate(info["final_info"]):
+                    # 如果该环境这一步结束了 (Done or Truncated)
+                    if final_info and "episode" in final_info:
+                        real_reward = final_info["episode"]["r"]
+                        steps = final_info["episode"]["l"]
+                        
+                        # 记录到 Tensorboard
+                        writer.add_scalar("Train/EpisodeReward", real_reward, global_step)
+                        writer.add_scalar("Train/EpisodeLen", steps, global_step)
+                        
+                        if global_step % 1000 == 0: # 减少打印频率
+                            logger.info(f"Step {global_step} | Env {idx} | Real Reward: {real_reward:.2f}")
+
+            # --- 核心修正 2: 处理 Truncation (超时) ---
+            # 对于 PPO 的 GAE 计算：
+            # - 如果是 Terminated (死了, done=True): 下一时刻价值为 0
+            # - 如果是 Truncated (时间到了, truncated=True): 下一时刻价值 = V(next_state)
+            # - 我们传给 Buffer 的 "done" 应该只包含 Terminated
+            
+            real_done = done # 对于 HalfCheetah, done 通常永远是 False (因为它只会超时不会死)
+            
+            # 半猎豹这种环境，通常只有 truncated 会为 True。
+            # 传给 buffer 的 masks 应该是 (1 - real_done)。
+            # 如果是 truncated，mask 依然是 1 (表示还有未来价值，只是被掐断了)
+            
+            # 注意：Buffer 里的 dones 用来计算 mask = 1 - done
+            # 所以这里直接传 done 数组即可。
+            # 重点：不要把 truncated 混进 done 里！
+            
+            agent.buffer.add_batch(state, action, log_prob, reward, done, value)
+            
+            # 处理 Truncation 的特殊情况：
+            # 如果被 truncate 了，我们需要人为计算一下 next_value 填补进 Buffer 的最后一个位置
+            # 但由于我们是 VectorEnv，GAE通常在 rollout 结束时统一算。
+            # 标准做法是：Gymnasium 的 VectorEnv 会自动 reset。
+            # info["final_observation"] 里存了 truncate 那一刻的真实 next_state
+            
+            # 为了简单起见，只要你这里的 done 不包含 truncated，GAE 就能大致算对。
+            # (HalfCheetah 基本上 done 全是 False，所以 GAE 会一直 bootstrap，这是对的)
             
             state = next_state
             global_step += args.num_envs

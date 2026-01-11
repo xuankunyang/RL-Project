@@ -187,7 +187,10 @@ class RolloutBuffer:
         # Storage: (num_steps, num_envs, ...)
         self.states = torch.zeros((buffer_size, num_envs, *state_shape)).to(device)
         self.actions = torch.zeros((buffer_size, num_envs, action_dim)).to(device)
-        self.log_probs = torch.zeros((buffer_size, num_envs, action_dim)).to(device)
+        
+        # === FIX 1: Log Prob 应该存 (N, 1)，而不是 (N, action_dim) ===
+        # 因为我们在 select_action 里已经 sum(dim=-1) 了
+        self.log_probs = torch.zeros((buffer_size, num_envs, 1)).to(device)
         self.rewards = torch.zeros((buffer_size, num_envs, 1)).to(device)
         self.dones = torch.zeros((buffer_size, num_envs, 1)).to(device)
         self.values = torch.zeros((buffer_size, num_envs, 1)).to(device)
@@ -211,7 +214,6 @@ class RolloutBuffer:
         self.states[self.ptr] = torch.FloatTensor(states).to(self.device)
         self.actions[self.ptr] = torch.FloatTensor(actions).to(self.device)
         
-        # Handle log_probs shape
         if len(log_probs.shape) == 1:
             log_probs = log_probs.reshape(-1, 1)
         self.log_probs[self.ptr] = torch.FloatTensor(log_probs).to(self.device)
