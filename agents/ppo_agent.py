@@ -1,8 +1,8 @@
 import torch
+import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
-import os
 from models.networks import GaussianPolicy
 from utils.buffers import RolloutBuffer
 
@@ -14,16 +14,13 @@ class PPOAgent:
         
         # Hyperparameters
         self.gamma = args.gamma
-        self.lr_actor = args.lr_actor
-        self.lr_critic = args.lr_critic
-        self.clip_param = args.ppo_clip
-        self.ppo_epoch = 10
-        self.batch_size = 64
+        self.learning_rate = args.lr
+        self.lr_actor = args.lr_actor if args.lr_actor is not None else args.lr
+        self.lr_critic = args.lr_critic if args.lr_critic is not None else args.lr
+        self.clip_range = args.ppo_clip
+        self.ppo_epochs = 10
+        self.mini_batch_size = 64
         self.hidden_dim = args.hidden_dim_ppo
-        self.value_loss_coef = 0.5
-        self.entropy_coef = 0.01
-        self.max_grad_norm = 0.5
-        self.rollout_len = 2048 # PPO typically collects a large batch
         
         # Model
         if hasattr(env, "single_observation_space"):
@@ -36,8 +33,6 @@ class PPOAgent:
         self.policy = GaussianPolicy(self.state_dim, self.action_dim, hidden_dim=self.hidden_dim).to(self.device)
         
         # Separate Parameter Groups
-        # GaussianPolicy has: actor_net, mean_layer, log_std_layer (Actor parts)
-        #                     critic_net (Critic parts)
         actor_params = list(self.policy.actor_net.parameters()) + \
                        list(self.policy.mean_layer.parameters()) + \
                        [self.policy.log_std_layer]
@@ -48,19 +43,30 @@ class PPOAgent:
             {'params': critic_params, 'lr': self.lr_critic}
         ])
         
-        # Buffer
-        self.buffer = RolloutBuffer(self.rollout_len, (self.state_dim,), self.action_dim, self.device, gamma=self.gamma)
+        # Buffer (vectorized for multi-env)
+        if hasattr(env, 'num_envs'):
+            self.num_envs = env.num_envs
+        else:
+            self.num_envs = 1
+        
+        self.rollout_len = 2048 // self.num_envs  # Adjust steps per env  
+        self.buffer = RolloutBuffer(
+            buffer_size=self.rollout_len, 
+            state_shape=(self.state_dim,), 
+            action_dim=self.action_dim,
+            num_envs=self.num_envs,
+            device=self.device, 
+            gamma=self.gamma
+        )
         
         self.update_step = 0
 
     def select_action(self, state, eval_mode=False):
         # Check for batch dim
-        if len(state.shape) == self.env.observation_space.shape[0]: # Single (dim, ) 
-             # Gymnasium VectorEnv returns (N, dim) for flat or (N, C, H, W) for image
-             # Standard MuJoCo state is (dim,)
+        if len(state.shape) == 1:  # Single env (dim,)
              is_batched = False
              state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-        else:
+        else:  # Batched (N, dim)
              is_batched = True
              state_t = torch.FloatTensor(state).to(self.device)
 
@@ -82,78 +88,63 @@ class PPOAgent:
             # Return scalars
             return action.cpu().numpy()[0], log_prob.cpu().item(), value.item()
 
-    def learn(self, last_v):
+    def learn(self, last_values):
         """
         PPO Main Learning Loop
-        last_v: Value of the next state (after the last step in buffer)
+        last_values: (num_envs,) - bootstrap values for each env
         """
         self.update_step += 1
         
         # 1. Compute GAE
-        advantages, returns = self.buffer.compute_gae_and_returns(last_v)
-        # Normalize AGV
+        advantages, returns = self.buffer.compute_gae_and_returns(last_values)
+        # Normalize advantages
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         
-        # Flatten everything to verify shapes
-        # Buffer stores (T, ...)
-        b_states = self.buffer.states
-        b_actions = self.buffer.actions
-        b_log_probs = self.buffer.log_probs
-        b_returns = returns
-        b_advantages = advantages
-        b_values = self.buffer.values
-        
-        # Optimizing
-        for _ in range(self.ppo_epoch):
-            sampler = self.buffer.get_batches(self.batch_size)
-            for batch_data in sampler:
-                states, actions, old_log_probs, old_values, indices = batch_data
+        # 2. PPO epochs
+        for epoch in range(self.ppo_epochs):
+            # Get mini-batches
+            for states_batch, actions_batch, old_log_probs, _, advantages_batch, returns_batch in \
+                self.buffer.get_batches(self.mini_batch_size, advantages, returns):
                 
-                # Target values
-                batch_returns = b_returns[indices]
-                batch_advantages = b_advantages[indices]
+                # Forward pass
+                dist = self.policy.get_action(states_batch)
+                values = self.policy(states_batch)
+                new_log_probs = dist.log_prob(actions_batch).sum(dim=-1, keepdim=True)
+                entropy = dist.entropy().sum(dim=-1, keepdim=True)
                 
-                # New prediction
-                dist = self.policy.get_action(states)
-                new_log_probs = dist.log_prob(actions).sum(dim=-1, keepdim=True)
-                entropy = dist.entropy().mean()
-                new_values = self.policy(states)
+                # Ratio for clipping
+                ratio = torch.exp(new_log_probs - old_log_probs)
                 
-                # Ratio
-                ratio = torch.exp(new_log_probs - old_log_probs.view(-1, 1))
-                
-                # Surrogate
-                surr1 = ratio * batch_advantages
-                surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * batch_advantages
+                # Policy loss
+                surr1 = ratio * advantages_batch
+                surr2 = torch.clamp(ratio, 1.0 - self.clip_range, 1.0 + self.clip_range) * advantages_batch
                 policy_loss = -torch.min(surr1, surr2).mean()
                 
-                # Value Loss
-                value_loss = F.mse_loss(new_values, batch_returns)
+                # Value loss
+                value_loss = F.mse_loss(values, returns_batch)
                 
-                # Total Loss
-                loss = policy_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy
+                # Total loss
+                loss = policy_loss + 0.5 * value_loss - 0.01 * entropy.mean()
                 
+                # Optimize
                 self.optimizer.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
+                torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=0.5)
                 self.optimizer.step()
                 
-            # Log Ratio stats (once per epoch to avoid spam, or mean)
-            if _ == 0:
-                 self.writer.add_scalar("Ratio/Mean", ratio.mean().item(), self.update_step)
-                 self.writer.add_scalar("Ratio/Max", ratio.max().item(), self.update_step)
-
-        # Logging
-        self.writer.add_scalar("Loss/Policy", policy_loss.item(), self.update_step)
-        self.writer.add_scalar("Loss/Value", value_loss.item(), self.update_step)
-        self.writer.add_scalar("Value/MeanAdvantage", advantages.mean().item(), self.update_step)
-        self.writer.add_scalar("Entropy", entropy.item(), self.update_step)
-
+                # Logging
+                if self.update_step % 10 == 0:
+                    self.writer.add_scalar("Loss/Policy", policy_loss.item(), self.update_step)
+                    self.writer.add_scalar("Loss/Value", value_loss.item(), self.update_step)
+                    self.writer.add_scalar("Loss/Entropy", entropy.mean().item(), self.update_step)
+                    self.writer.add_scalar("Ratio/Mean", ratio.mean().item(), self.update_step)
+                    self.writer.add_scalar("Ratio/Max", ratio.max().item(), self.update_step)
+        
         # Clear buffer
         self.buffer.clear()
-
+    
     def save(self, path):
         torch.save(self.policy.state_dict(), path)
-
+    
     def load(self, path):
         self.policy.load_state_dict(torch.load(path))

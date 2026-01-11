@@ -158,11 +158,6 @@ def main():
         # We will seed on reset.
         agent = DQNAgent(env, args, writer)
     elif args.algo == 'ppo':
-        # Workaround: Disable VectorEnv for PPO to avoid GAE bug (as discussed in plan logic)
-        if args.num_envs > 1:
-            logger.warning("PPO does not currently support VectorEnv (GAE implementation limitation). Forcing num_envs=1.")
-            args.num_envs = 1
-            
         env = make_mujoco_env(args.env_name, num_envs=args.num_envs, seed=args.seed)
         agent = PPOAgent(env, args, writer)
     
@@ -276,27 +271,28 @@ def main():
                 agent.learn()
             
         elif args.algo == 'ppo':
-            # PPO (Forces num_envs=1 currently)
+            # PPO (Now supports multi-env!)
             action, log_prob, value = agent.select_action(state)
             next_state, reward, done, truncated, _ = env.step(action)
-            current_ep_reward[0] += reward
+            current_ep_reward += reward
             
-            # Store in RolloutBuffer
-            agent.buffer.add(state, action, log_prob, reward, done, value)
+            # Store batch
+            agent.buffer.add_batch(state, action, log_prob, reward, done | truncated, value)
             
             state = next_state
-            global_step += 1
+            global_step += args.num_envs
             
-            if done or truncated:
-                writer.add_scalar("Train/EpisodeReward", current_ep_reward[0], global_step)
-                logger.info(f"Step {global_step} | Train Reward: {current_ep_reward[0]:.2f}")
-                current_ep_reward[0] = 0
-                state, _ = env.reset()
+           # Log episode rewards
+            for i in range(args.num_envs):
+                if done[i] or truncated[i]:
+                    writer.add_scalar("Train/EpisodeReward", current_ep_reward[i], global_step + i)
+                    logger.info(f"Step {global_step} | Env {i} Reward: {current_ep_reward[i]:.2f}")
+                    current_ep_reward[i] = 0
             
             # Update if buffer full
             if agent.buffer.full:
-                _, _, last_val = agent.select_action(state, eval_mode=True)
-                agent.learn(last_val)
+                _, _, last_values = agent.select_action(state, eval_mode=True)
+                agent.learn(last_values)
 
         # --- Logging ---
         if global_step % 1000 == 0:

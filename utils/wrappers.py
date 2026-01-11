@@ -43,7 +43,7 @@ def make_atari_env(env_name, num_envs=1, seed=42):
 def make_mujoco_env(env_name, num_envs=1, seed=42):
     def make_env(rank):
         def _thunk():
-            env = gym.make(env_name, render_mode="rgb_array")
+            env = gym.make(env_name)  # Remove render_mode for speed
             env = gym.wrappers.NormalizeObservation(env)
             env = gym.wrappers.NormalizeReward(env)
             env = gym.wrappers.TransformReward(env, lambda r: np.clip(r, -10, 10))

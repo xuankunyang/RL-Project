@@ -173,52 +173,77 @@ class NStepReplayBuffer:
         return self.buffer.size
 
 class RolloutBuffer:
-    def __init__(self, buffer_size, state_shape, action_dim, device, gamma=0.99, gae_lambda=0.95):
+    """
+    Vectorized Rollout Buffer for PPO with multiple parallel environments.
+    Shape: (num_steps, num_envs, ...)
+    """
+    def __init__(self, buffer_size, state_shape, action_dim, num_envs, device, gamma=0.99, gae_lambda=0.95):
         self.max_size = buffer_size
+        self.num_envs = num_envs
         self.device = device
         self.gamma = gamma
         self.gae_lambda = gae_lambda
 
-        self.states = torch.zeros((buffer_size, *state_shape)).to(device)
-        self.actions = torch.zeros((buffer_size, action_dim)).to(device)
-        self.log_probs = torch.zeros((buffer_size, action_dim)).to(device)
-        self.rewards = torch.zeros((buffer_size, 1)).to(device)
-        self.dones = torch.zeros((buffer_size, 1)).to(device)
-        self.values = torch.zeros((buffer_size, 1)).to(device)
+        # Storage: (num_steps, num_envs, ...)
+        self.states = torch.zeros((buffer_size, num_envs, *state_shape)).to(device)
+        self.actions = torch.zeros((buffer_size, num_envs, action_dim)).to(device)
+        self.log_probs = torch.zeros((buffer_size, num_envs, action_dim)).to(device)
+        self.rewards = torch.zeros((buffer_size, num_envs, 1)).to(device)
+        self.dones = torch.zeros((buffer_size, num_envs, 1)).to(device)
+        self.values = torch.zeros((buffer_size, num_envs, 1)).to(device)
         
         self.ptr = 0
         self.full = False
 
-    def add(self, state, action, log_prob, reward, done, value):
+    def add_batch(self, states, actions, log_probs, rewards, dones, values):
+        """
+        Add a batch of transitions from all environments.
+        states: (num_envs, state_dim) or (num_envs, *state_shape)
+        actions: (num_envs, action_dim)
+        log_probs: (num_envs, action_dim) or (num_envs,)
+        rewards: (num_envs,)
+        dones: (num_envs,)
+       values: (num_envs,)
+        """
         if self.ptr >= self.max_size:
             raise ValueError("Buffer is full!")
             
-        self.states[self.ptr] = torch.FloatTensor(state).to(self.device)
-        self.actions[self.ptr] = torch.FloatTensor(action).to(self.device)
-        self.log_probs[self.ptr] = torch.FloatTensor([log_prob]).to(self.device)
-        self.rewards[self.ptr] = torch.FloatTensor([reward]).to(self.device)
-        self.dones[self.ptr] = torch.FloatTensor([done]).to(self.device)
-        self.values[self.ptr] = torch.FloatTensor([value]).to(self.device)
+        self.states[self.ptr] = torch.FloatTensor(states).to(self.device)
+        self.actions[self.ptr] = torch.FloatTensor(actions).to(self.device)
+        
+        # Handle log_probs shape
+        if len(log_probs.shape) == 1:
+            log_probs = log_probs.reshape(-1, 1)
+        self.log_probs[self.ptr] = torch.FloatTensor(log_probs).to(self.device)
+        
+        self.rewards[self.ptr] = torch.FloatTensor(rewards).reshape(-1, 1).to(self.device)
+        self.dones[self.ptr] = torch.FloatTensor(dones).reshape(-1, 1).to(self.device)
+        self.values[self.ptr] = torch.FloatTensor(values).reshape(-1, 1).to(self.device)
         
         self.ptr += 1
         if self.ptr == self.max_size:
             self.full = True
 
-    def compute_gae_and_returns(self, last_value):
+    def compute_gae_and_returns(self, last_values):
         """
-        计算 GAE (Generalized Advantage Estimation) 和 Returns
-        """
-        advantages = torch.zeros_like(self.rewards).to(self.device)
-        last_gae_lam = 0
+        Compute GAE (Generalized Advantage Estimation) and Returns.
+        last_values: (num_envs,) - bootstrap values for final state
         
-        # 从后往前计算
+        Handles multiple environments independently.
+        """
+        last_values = torch.FloatTensor(last_values).reshape(-1, 1).to(self.device)
+        
+        advantages = torch.zeros_like(self.rewards).to(self.device)
+        last_gae_lam = torch.zeros((self.num_envs, 1)).to(self.device)
+        
+        # Backward pass for each timestep
         for t in reversed(range(self.max_size)):
             if t == self.max_size - 1:
-                next_non_terminal = 1.0 - self.dones[t] # if done, 0
-                next_value = last_value
+                next_non_terminal = 1.0 - self.dones[t]
+                next_value = last_values
             else:
                 next_non_terminal = 1.0 - self.dones[t]
-                next_value = self.values[t+1]
+                next_value = self.values[t + 1]
             
             delta = self.rewards[t] + self.gamma * next_value * next_non_terminal - self.values[t]
             last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
@@ -231,16 +256,31 @@ class RolloutBuffer:
         self.ptr = 0
         self.full = False
 
-    def get_batches(self, batch_size):
-        indices = np.arange(self.max_size)
+    def get_batches(self, batch_size, advantages, returns):
+        """
+        Get mini-batches for training.
+        Flatten (num_steps, num_envs) to (num_steps * num_envs) and shuffle.
+        """
+        # Flatten all buffers
+        total_samples = self.max_size * self.num_envs
+        
+        states_flat = self.states.reshape(total_samples, -1)
+        actions_flat = self.actions.reshape(total_samples, -1)
+        log_probs_flat = self.log_probs.reshape(total_samples, -1)
+        values_flat = self.values.reshape(total_samples, -1)
+        advantages_flat = advantages.reshape(total_samples, -1)
+        returns_flat = returns.reshape(total_samples, -1)
+        
+        indices = np.arange(total_samples)
         np.random.shuffle(indices)
         
-        for start_idx in range(0, self.max_size, batch_size):
+        for start_idx in range(0, total_samples, batch_size):
             idx = indices[start_idx : start_idx + batch_size]
             yield (
-                self.states[idx],
-                self.actions[idx],
-                self.log_probs[idx],
-                self.values[idx],
-                idx # 返回索引以便外部使用 (如重新计算 returns)
+                states_flat[idx],
+                actions_flat[idx],
+                log_probs_flat[idx],
+                values_flat[idx],
+                advantages_flat[idx],
+                returns_flat[idx]
             )
