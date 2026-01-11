@@ -13,7 +13,7 @@ $running_jobs = @()
 
 $job_id = 0
 
-$env = "ALE/Breakout-v5"
+$env = "ALE/Pong-v5"
 
 foreach ($dtype in $dqn_types) {
     foreach ($lr in $lrs) {
