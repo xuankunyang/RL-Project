@@ -179,55 +179,11 @@ def main():
         
         # --- Action Selection ---
         if args.algo == 'dqn':
-            # vector step
-            action = agent.select_action(state, global_step) # Returns array if num_envs > 1
+            # DQN: vector or single env step
+            action = agent.select_action(state, global_step)
             if args.num_envs == 1 and np.isscalar(action):
                  action = np.array([action])
             
-            # DQN specific: execution
-            next_state, reward, done, truncated, info = env.step(action)
-            current_ep_reward += reward
-            
-            # Iterate over batch
-            for i in range(args.num_envs):
-                real_next_state = next_state[i]
-                is_done = done[i] or truncated[i]
-                
-                # Check for final observation if done
-                if is_done:
-                    # AsyncVectorEnv logic for final observation
-                    if "final_observation" in info:
-                         # final_observation is usually a list of arrays or array of arrays
-                         real_next_state = info["final_observation"][i]
-                    elif "_final_observation" in info and info["_final_observation"][i]:
-                         # Some gym versions
-                         real_next_state = info["final_observation"][i]
-
-                # If num_envs=1, state is (C, H, W). If > 1, state is (N, C, H, W).
-                # But buffer expects (C, H, W).
-                s_i = state[i] if args.num_envs > 1 else state
-                a_i = action[i] if args.num_envs > 1 else action
-                r_i = reward[i] if args.num_envs > 1 else reward
-                ns_i = real_next_state if args.num_envs > 1 else real_next_state # handled above
-                d_i = is_done
-                
-                # Handling single env case where indexing might be weird if we squeezed it?
-                # Actually, make_atari_env(num=1) returns non-vector env.
-                # So state is (C, H, W). len(state.shape)=3.
-                # If num=2, state is (2, C, H, W).
-                # My loop implies I treat single env as vector of size 1?
-                # No, make_atari_env returns DummyVecEnv or similar only if num > 1?
-                # In wrappers.py: if num_envs > 1: return AsyncVectorEnv. else: return make_env(0)().
-                # So if num_envs=1, it is a STANDARD Gym Env.
-                # Standard Env step returns scalar reward, int action.
-                # My logic `current_ep_reward = np.zeros(args.num_envs)` implies array.
-                # `action = agent.select_action(...)` returns scalar if single env.
-                # `env.step(action)` returns `state` (C,H,W), `reward` (float), `done` (bool).
-                # So I need to differentiate Single vs Vector in this loop OR force VectorEnv for N=1 too?
-                # Forcing VectorEnv for N=1 is cleaner but might add overhead.
-                # I will handle the difference.
-                pass 
-
             # RE-WRITING LOGIC TO HANDLE BOTH SINGLE AND VECTOR SAFELY
             
             if args.num_envs == 1:
@@ -257,8 +213,9 @@ def main():
                 
                 # Fix next_state for done envs AND log rewards
                 for i in range(args.num_envs):
-                    # Accumulate reward BEFORE checking done
-                    current_ep_reward[i] += reward[i]
+                    # Accumulate reward for this step
+                    step_reward = reward[i]
+                    current_ep_reward[i] += step_reward
                     
                     if done[i] or truncated[i]:
                         # Try fetch final obs
@@ -270,11 +227,15 @@ def main():
                         # Log episode reward
                         ep_reward = current_ep_reward[i]
                         writer.add_scalar("Train/EpisodeReward", ep_reward, global_step + i)
-                        logger.info(f"Global Step {global_step} | Env {i} Episode Reward: {ep_reward:.2f}")
                         
-                        # Validation check for Pong (optional, can comment out after debugging)
-                        if 'Pong' in args.env_name and abs(ep_reward) > 25:
-                            logger.warning(f"Unusual Pong reward: {ep_reward:.2f} at step {global_step}")  
+                        # Enhanced logging for debugging
+                        if 'Pong' in args.env_name:
+                            if abs(ep_reward) > 25:
+                                logger.warning(f"[ANOMALY] Step {global_step} | Env {i} | Episode Reward: {ep_reward:.2f} | Last Step Reward: {step_reward:.2f}")
+                            else:
+                                logger.info(f"Step {global_step} | Env {i} | Episode Reward: {ep_reward:.2f}")
+                        else:
+                            logger.info(f"Step {global_step} | Env {i} | Episode Reward: {ep_reward:.2f}")
                         
                         # Clear for next episode
                         current_ep_reward[i] = 0
