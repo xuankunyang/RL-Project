@@ -38,11 +38,11 @@ def evaluate(agent, env_name, algo, seed, episodes=5):
         truncated = False
         episode_reward = 0
         while not (done or truncated):
-            action = agent.select_action(state, steps_done=0, eval_mode=True)
-            if isinstance(action, tuple): action = action[0] # Handle PPO return format if needed
-            
-            # PPO select_action returns (action, log_prob, value)
-            # DQN select_action returns action_int
+            # Different select_action signatures for DQN vs PPO
+            if algo == 'dqn':
+                action = agent.select_action(state, steps_done=0, eval_mode=True)
+            else:  # PPO
+                action, _, _ = agent.select_action(state, eval_mode=True)
             
             next_state, reward, done, truncated, _ = eval_env.step(action)
             episode_reward += reward
@@ -251,13 +251,15 @@ def main():
                 # Vector Flow
                 # action is array
                 next_state, reward, done, truncated, info = env.step(action)
-                current_ep_reward += reward
                 
                 # Optimized add_batch
                 real_next_states = next_state.copy()
                 
-                # Fix next_state for done envs
+                # Fix next_state for done envs AND log rewards
                 for i in range(args.num_envs):
+                    # Accumulate reward BEFORE checking done
+                    current_ep_reward[i] += reward[i]
+                    
                     if done[i] or truncated[i]:
                         # Try fetch final obs
                         if "final_observation" in info:
@@ -265,8 +267,16 @@ def main():
                         elif "_final_observation" in info and info["_final_observation"][i]:
                              real_next_states[i] = info["final_observation"][i]
                         
-                        writer.add_scalar("Train/EpisodeReward", current_ep_reward[i], global_step + i)
-                        logger.info(f"Global Step {global_step} | Env {i} Reward: {current_ep_reward[i]:.2f}")
+                        # Log episode reward
+                        ep_reward = current_ep_reward[i]
+                        writer.add_scalar("Train/EpisodeReward", ep_reward, global_step + i)
+                        logger.info(f"Global Step {global_step} | Env {i} Episode Reward: {ep_reward:.2f}")
+                        
+                        # Validation check for Pong (optional, can comment out after debugging)
+                        if 'Pong' in args.env_name and abs(ep_reward) > 25:
+                            logger.warning(f"Unusual Pong reward: {ep_reward:.2f} at step {global_step}")  
+                        
+                        # Clear for next episode
                         current_ep_reward[i] = 0
                 
                 # Bulk add
@@ -283,20 +293,24 @@ def main():
             # PPO (Now supports multi-env!)
             action, log_prob, value = agent.select_action(state)
             next_state, reward, done, truncated, _ = env.step(action)
-            current_ep_reward += reward
+            
+            # Process each environment
+            for i in range(args.num_envs):
+                # Accumulate reward for each environment separately
+                current_ep_reward[i] += reward[i]
+                
+                # Log when episode ends
+                if done[i] or truncated[i]:
+                    ep_reward = current_ep_reward[i]
+                    writer.add_scalar("Train/EpisodeReward", ep_reward, global_step + i)
+                    logger.info(f"Step {global_step} | Env {i} Episode Reward: {ep_reward:.2f}")
+                    current_ep_reward[i] = 0
             
             # Store batch
             agent.buffer.add_batch(state, action, log_prob, reward, done | truncated, value)
             
             state = next_state
             global_step += args.num_envs
-            
-           # Log episode rewards
-            for i in range(args.num_envs):
-                if done[i] or truncated[i]:
-                    writer.add_scalar("Train/EpisodeReward", current_ep_reward[i], global_step + i)
-                    logger.info(f"Step {global_step} | Env {i} Reward: {current_ep_reward[i]:.2f}")
-                    current_ep_reward[i] = 0
             
             # Update if buffer full
             if agent.buffer.full:
