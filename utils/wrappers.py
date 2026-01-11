@@ -8,7 +8,8 @@ from gymnasium.wrappers import (
     TransformObservation, 
     NormalizeReward, 
     TransformReward, 
-    AtariPreprocessing
+    AtariPreprocessing, 
+    FrameStackObservation
 )
 
 
