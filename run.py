@@ -68,6 +68,7 @@ def main():
     parser.add_argument('--eval_freq', type=int, default=10000, help='Evaluation frequency')
 
     # === 超参数 (用于 Grid Search) ===
+    parser.add_argument('--update_freq', type=int, default=10000, help='Target network update frequency')
     parser.add_argument('--hidden_dim_dqn', type=int, default=512, help='Hidden dimension for DQNs')
     parser.add_argument('--hidden_dim_ppo', type=int, default=256, help='Hidden dimension for PPOs')
     parser.add_argument('--lr', type=float, default=3e-4, help='Learning rate (Shared default)')

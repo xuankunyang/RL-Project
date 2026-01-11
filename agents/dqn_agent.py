@@ -17,7 +17,7 @@ class DQNAgent:
         # Hyperparameters
         self.gamma = args.gamma
         self.batch_size = args.batch_size
-        self.target_update_freq = 1000
+        self.target_update_freq = args.target_update_freq
         self.epsilon_start = 1.0
         self.epsilon_final = 0.05
         self.epsilon_decay = 100000
