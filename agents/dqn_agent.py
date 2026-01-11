@@ -19,8 +19,8 @@ class DQNAgent:
         self.batch_size = args.batch_size
         self.target_update_freq = args.update_freq
         self.epsilon_start = 1.0
-        self.epsilon_final = 0.01
-        self.epsilon_decay = 500000
+        self.epsilon_final = 0.02
+        self.epsilon_decay = 200000
         self.learning_rate = args.lr
         self.learn_step_counter = 0
         self.hidden_dim = args.hidden_dim_dqn

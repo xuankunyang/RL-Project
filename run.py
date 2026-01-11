@@ -66,6 +66,7 @@ def main():
     parser.add_argument('--total_timesteps', type=int, default=1000000, help='Total training steps')
     parser.add_argument('--exp_name', type=str, default='default_exp', help='Experiment name for logging')
     parser.add_argument('--eval_freq', type=int, default=50000, help='Evaluation frequency')
+    parser.add_argument('--learning_start', type=int, default=10000, help='Learning start steps')
 
     # === 超参数 (用于 Grid Search) ===
     parser.add_argument('--update_freq', type=int, default=1000, help='Target network update frequency')
@@ -271,7 +272,7 @@ def main():
                 global_step += args.num_envs
             
             # Train every train_freq steps (for efficiency)
-            if global_step % args.train_freq == 0:
+            if global_step % args.train_freq == 0 and global_step >= args.learning_start:
                 agent.learn()
             
         elif args.algo == 'ppo':
