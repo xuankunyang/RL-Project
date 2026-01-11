@@ -66,7 +66,6 @@ def main():
     parser.add_argument('--total_timesteps', type=int, default=1000000, help='Total training steps')
     parser.add_argument('--exp_name', type=str, default='default_exp', help='Experiment name for logging')
     parser.add_argument('--eval_freq', type=int, default=50000, help='Evaluation frequency')
-    parser.add_argument('--learning_start', type=int, default=10000, help='Learning start steps')
 
     # === 超参数 (用于 Grid Search) ===
     # DQN
@@ -77,6 +76,7 @@ def main():
     parser.add_argument('--epsilon_decay', type=float, default=500000, help='Epsilon decay steps')
     parser.add_argument('--epsilon_min', type=float, default=0.01, help='Minimum epsilon value')
     parser.add_argument('--epsilon_start', type=float, default=1.0, help='Initial epsilon value')
+    parser.add_argument('--learning_start', type=int, default=10000, help='Learning start steps')
 
     # PPO
     parser.add_argument('--hidden_dim_ppo', type=int, default=256, help='Hidden dimension for PPOs')
