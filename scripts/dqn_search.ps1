@@ -13,6 +13,8 @@ $running_jobs = @()
 
 $job_id = 0
 
+$env = "ALE/Breakout-v5"
+
 foreach ($dtype in $dqn_types) {
     foreach ($lr in $lrs) {
         foreach ($uf in $update_freqs) {
@@ -20,7 +22,7 @@ foreach ($dtype in $dqn_types) {
                 $device = $devices[$job_id % $devices.Length]
                 $exp_name = "DQN_${dtype}_lr${lr}_uf${uf}_hd${hd}_sd42"
 
-                $cmd_args = "--algo dqn --dqn_type $dtype --env_name BreakoutNoFrameskip-v4 --lr $lr --update_freq $uf --hidden_dim_dqn $hd --num_envs 16 --device $device --total_timesteps 2000000 --exp_name $exp_name"
+                $cmd_args = "--algo dqn --dqn_type $dtype --env_name $env --lr $lr --update_freq $uf --hidden_dim_dqn $hd --num_envs 16 --device $device --total_timesteps 2000000 --exp_name $exp_name"
 
                 Write-Host "Starting Job $job_id on $device : DQN-$dtype | LR: $lr | UF: $uf | HD: $hd"
                 $proc = Start-Process python -ArgumentList $cmd_args -PassThru -NoNewWindow

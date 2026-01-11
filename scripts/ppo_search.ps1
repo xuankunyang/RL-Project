@@ -14,6 +14,8 @@ $running_jobs = @()
 
 $job_id = 0
 
+$env = "HalfCheetah-v4"
+
 foreach ($clip in $ppo_clips) {
     foreach ($lr_a in $lr_actors) {
         foreach ($lr_c in $lr_critics) {
@@ -21,7 +23,7 @@ foreach ($clip in $ppo_clips) {
                 $device = $devices[$job_id % $devices.Length]
                 $exp_name = "PPO_clip${clip}_lra${lr_a}_lrc${lr_c}_hd${hd}_sd42"
 
-                $cmd_args = "--algo ppo --env_name HalfCheetah-v4 --lr_actor $lr_a --lr_critic $lr_c --hidden_dim_ppo $hd --ppo_clip $clip --num_envs 1 --device $device --total_timesteps 2000000 --exp_name $exp_name"
+                $cmd_args = "--algo ppo --env_name $env --lr_actor $lr_a --lr_critic $lr_c --hidden_dim_ppo $hd --ppo_clip $clip --num_envs 1 --device $device --total_timesteps 2000000 --exp_name $exp_name"
 
                 Write-Host "Starting Job $job_id on $device : PPO | Clip: $clip | LRA: $lr_a | LRC: $lr_c | HD: $hd"
                 $proc = Start-Process python -ArgumentList $cmd_args -PassThru -NoNewWindow

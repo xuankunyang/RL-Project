@@ -17,16 +17,17 @@ def make_atari_env(env_name, num_envs=1, seed=42):
     """
     def make_env(rank):
         def _thunk():
-            # Remove render_mode for speed
-            env = gym.make(env_name) 
+            # Atari v5: frameskip handled by env, not AtariPreprocessing
+            # Use frameskip parameter in gym.make() or let v5 defaults handle it
+            env = gym.make(env_name, frameskip=4)  # v5 parameter
             env = AtariPreprocessing(
                 env, 
                 noop_max=30, 
-                frame_skip=4, 
+                frame_skip=1,  # v5 already handles frame skip, set to 1
                 screen_size=84, 
                 terminal_on_life_loss=False,  
                 grayscale_obs=True,
-                scale_obs=False # Return uint8 (0-255) to save RAM/Bandwidth
+                scale_obs=False  # Return uint8 (0-255) to save RAM/Bandwidth
             )
             env = FrameStackObservation(env, stack_size=4)
             return env

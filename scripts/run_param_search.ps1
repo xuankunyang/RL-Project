@@ -14,7 +14,7 @@ $job_id = 0
 
 foreach ($algo in $algos) {
     if ($algo -eq "dqn") {
-        $env = "BreakoutNoFrameskip-v4"
+        $env = "ALE/Breakout-v5"
         # Iterate over DQN variants
         foreach ($dtype in $dqn_types) {
             foreach ($lr in $lrs) {

@@ -20,18 +20,18 @@ RL-Project/
 
 ### Single Experiment (Debug / Test)
 ```bash
-# Vanilla DQN (Single Core)
-python run.py --algo dqn --dqn_type dqn --env_name BreakoutNoFrameskip-v4 --seed 42 --device cuda:0
+# Vanilla DQN (Single Core) - Using Atari v5
+python run.py --algo dqn --dqn_type dqn --env_name ALE/Breakout-v5 --seed 42 --device cuda:0
 
 # DQN with Vectorized Environments (Speed Up!)
 # Uses 16 CPU cores to collect data in parallel (Now Default for Script)
-python run.py --algo dqn --dqn_type dqn --env_name BreakoutNoFrameskip-v4 --num_envs 16 --device cuda:0
+python run.py --algo dqn --dqn_type dqn --env_name ALE/Breakout-v5 --num_envs 16 --device cuda:0
 
 # Double DQN
-python run.py --algo dqn --dqn_type double --env_name BreakoutNoFrameskip-v4 --seed 42 --device cuda:0
+python run.py --algo dqn --dqn_type double --env_name ALE/Breakout-v5 --seed 42 --device cuda:0
 
 # Rainbow-Lite (Double + Dueling + PER + 3-Step)
-python run.py --algo dqn --dqn_type rainbow --env_name BreakoutNoFrameskip-v4 --seed 42 --device cuda:0
+python run.py --algo dqn --dqn_type rainbow --env_name ALE/Breakout-v5 --seed 42 --device cuda:0
 
 # PPO (Standard)
 python run.py --algo ppo --env_name HalfCheetah-v4 --seed 42 --device cuda:0
@@ -53,6 +53,10 @@ This distributes jobs across your 4 GPUs with optimized settings.
 - **Directory Structure**: `results/Region/Environment/Variant/Hyperparams_Timestamp/`
 - **Log File**: `log.txt` inside the run folder.
 - **Models**: `models/` subdirectory.
+
+### Atari v5 Note
+- **Environment**: Using Atari v5 (`ALE/Breakout-v5` format) with built-in frame skip.
+- **Frame Skip**: Configured via `frameskip=4` parameter in `gym.make()`, not `AtariPreprocessing`.
 
 ### Performance Optimization (Update)
 - **`--num_envs 16`**: Utilizing 16 parallel envs per experiment to maximize CPU usage.
