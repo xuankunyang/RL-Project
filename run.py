@@ -74,6 +74,9 @@ def main():
     parser.add_argument('--train_freq', type=int, default=4, help='Training frequency (train every N steps)')
     parser.add_argument('--hidden_dim_dqn', type=int, default=512, help='Hidden dimension for DQNs')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate (Shared default)')
+    parser.add_argument('--epsilon_decay', type=float, default=500000, help='Epsilon decay steps')
+    parser.add_argument('--epsilon_min', type=float, default=0.01, help='Minimum epsilon value')
+    parser.add_argument('--epsilon_start', type=float, default=1.0, help='Initial epsilon value')
 
     # PPO
     parser.add_argument('--hidden_dim_ppo', type=int, default=256, help='Hidden dimension for PPOs')
