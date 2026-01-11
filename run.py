@@ -72,7 +72,7 @@ def main():
     parser.add_argument('--train_freq', type=int, default=4, help='Training frequency (train every N steps)')
     parser.add_argument('--hidden_dim_dqn', type=int, default=512, help='Hidden dimension for DQNs')
     parser.add_argument('--hidden_dim_ppo', type=int, default=256, help='Hidden dimension for PPOs')
-    parser.add_argument('--lr', type=float, default=3e-4, help='Learning rate (Shared default)')
+    parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate (Shared default)')
     parser.add_argument('--lr_actor', type=float, default=None, help='Actor Learning rate (if None, use --lr)')
     parser.add_argument('--lr_critic', type=float, default=None, help='Critic Learning rate (if None, use --lr)')
     parser.add_argument('--ppo_clip', type=float, default=0.2, help='PPO Clip range')
