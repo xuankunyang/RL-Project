@@ -74,7 +74,7 @@ def main():
     parser.add_argument('--hidden_dim_dqn', type=int, default=512, help='Hidden dimension for DQNs')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate (Shared default)')
     parser.add_argument('--epsilon_decay', type=float, default=500000, help='Epsilon decay steps')
-    parser.add_argument('--epsilon_min', type=float, default=0.01, help='Minimum epsilon value')
+    parser.add_argument('--epsilon_final', type=float, default=0.01, help='Minimum epsilon value')
     parser.add_argument('--epsilon_start', type=float, default=1.0, help='Initial epsilon value')
     parser.add_argument('--learning_start', type=int, default=10000, help='Learning start steps')
 
