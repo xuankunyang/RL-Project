@@ -2,16 +2,16 @@ import numpy as np
 import torch
 
 class ReplayBuffer:
-    def __init__(self, capacity, state_shape, device):
+    def __init__(self, capacity, state_shape, device, state_dtype=np.uint8):
         self.capacity = capacity
         self.device = device
         self.ptr = 0
         self.size = 0
         
-        self.states = np.zeros((capacity, *state_shape), dtype=np.float32)
+        self.states = np.zeros((capacity, *state_shape), dtype=state_dtype)
         self.actions = np.zeros((capacity, 1), dtype=np.int64)
         self.rewards = np.zeros((capacity, 1), dtype=np.float32)
-        self.next_states = np.zeros((capacity, *state_shape), dtype=np.float32)
+        self.next_states = np.zeros((capacity, *state_shape), dtype=state_dtype)
         self.dones = np.zeros((capacity, 1), dtype=np.float32)
 
     def add(self, state, action, reward, next_state, done):
@@ -24,11 +24,56 @@ class ReplayBuffer:
         self.ptr = (self.ptr + 1) % self.capacity
         self.size = min(self.size + 1, self.capacity)
 
+    def add_batch(self, states, actions, rewards, next_states, dones):
+        """
+        Add a batch of transitions to the buffer.
+        states: (B, ...)
+        actions: (B,) or (B, 1)
+        rewards: (B,) or (B, 1)
+        next_states: (B, ...)
+        dones: (B,) or (B, 1)
+        """
+        batch_size = len(states)
+        if self.ptr + batch_size <= self.capacity:
+            # No wrap-around needed
+            self.states[self.ptr : self.ptr + batch_size] = states
+            self.actions[self.ptr : self.ptr + batch_size] = actions.reshape(-1, 1)
+            self.rewards[self.ptr : self.ptr + batch_size] = rewards.reshape(-1, 1)
+            self.next_states[self.ptr : self.ptr + batch_size] = next_states
+            self.dones[self.ptr : self.ptr + batch_size] = dones.reshape(-1, 1)
+            
+            self.ptr = (self.ptr + batch_size) % self.capacity
+            self.size = min(self.size + batch_size, self.capacity)
+        else:
+            # Wrap-around needed
+            space_left = self.capacity - self.ptr
+            # First part
+            self.states[self.ptr:] = states[:space_left]
+            self.actions[self.ptr:] = actions[:space_left].reshape(-1, 1)
+            self.rewards[self.ptr:] = rewards[:space_left].reshape(-1, 1)
+            self.next_states[self.ptr:] = next_states[:space_left]
+            self.dones[self.ptr:] = dones[:space_left].reshape(-1, 1)
+            
+            # Second part (start from 0)
+            rem = batch_size - space_left
+            self.states[:rem] = states[space_left:]
+            self.actions[:rem] = actions[space_left:].reshape(-1, 1)
+            self.rewards[:rem] = rewards[space_left:].reshape(-1, 1)
+            self.next_states[:rem] = next_states[space_left:]
+            self.dones[:rem] = dones[space_left:].reshape(-1, 1)
+            
+            self.ptr = rem
+            self.size = min(self.size + batch_size, self.capacity)
+
     def sample(self, batch_size):
         ind = np.random.randint(0, self.size, size=batch_size)
         
+        # Note: If uint8, conversion to float happens here or inside agent?
+        # Usually standard is converts to float inside agent or here. 
+        # ReplayBuffer just returns what is stored. Agent handles normalization.
+        
         return (
-            torch.FloatTensor(self.states[ind]).to(self.device),
+            torch.FloatTensor(self.states[ind]).to(self.device), # Converts uint8 to float32
             torch.LongTensor(self.actions[ind]).to(self.device),
             torch.FloatTensor(self.rewards[ind]).to(self.device),
             torch.FloatTensor(self.next_states[ind]).to(self.device),

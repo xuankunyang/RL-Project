@@ -17,7 +17,8 @@ def make_atari_env(env_name, num_envs=1, seed=42):
     """
     def make_env(rank):
         def _thunk():
-            env = gym.make(env_name, render_mode="rgb_array")
+            # Remove render_mode for speed
+            env = gym.make(env_name) 
             env = AtariPreprocessing(
                 env, 
                 noop_max=30, 
@@ -25,7 +26,7 @@ def make_atari_env(env_name, num_envs=1, seed=42):
                 screen_size=84, 
                 terminal_on_life_loss=False,  
                 grayscale_obs=True,
-                scale_obs=True
+                scale_obs=False # Return uint8 (0-255) to save RAM/Bandwidth
             )
             env = FrameStackObservation(env, stack_size=4)
             return env

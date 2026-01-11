@@ -17,7 +17,7 @@ class DQNAgent:
         # Hyperparameters
         self.gamma = args.gamma
         self.batch_size = args.batch_size
-        self.target_update_freq = args.target_update_freq
+        self.target_update_freq = args.update_freq
         self.epsilon_start = 1.0
         self.epsilon_final = 0.05
         self.epsilon_decay = 100000
@@ -98,6 +98,10 @@ class DQNAgent:
                 return np.random.randint(0, self.action_dim, size=(batch_size,)) # Array (N,)
         else:
             with torch.no_grad():
+                # Normalize here if uint8 input
+                if state_t.dtype == torch.uint8:
+                     state_t = state_t.float() / 255.0
+                     
                 q_values = self.q_net(state_t)
                 actions = q_values.max(1)[1].cpu().numpy() # Return (N,)
             
@@ -118,6 +122,15 @@ class DQNAgent:
         else:
             states, actions, rewards, next_states, dones = self.buffer.sample(self.batch_size)
             weights = torch.ones_like(rewards)
+        
+        # Normalize batch (if not already float)
+        # ReplayBuffer currently returns FloatTensor even if stored as uint8 (it converts in sample)
+        # Wait, my ReplayBuffer.sample() code says: "torch.FloatTensor(self.states[ind])"
+        # This casts uint8 to float32 but preserves values [0, 255].
+        # So we MUST divide by 255.0 here.
+        
+        states = states / 255.0
+        next_states = next_states / 255.0
         
         # Current Q
         q_values = self.q_net(states)
@@ -171,8 +184,8 @@ class DQNAgent:
             self.writer.add_scalar("Value/MeanQ", current_q.mean().item(), self.learn_step_counter)
             self.writer.add_scalar("Gradients/Norm", total_norm, self.learn_step_counter)
 
-        # Log Custom: Network Weights (Histogram)
-        if self.learn_step_counter % 1000 == 0:
+        # Log Custom: Network Weights (Histogram) - REDUCED FREQ
+        if self.learn_step_counter % 10000 == 0:
             for name, param in self.q_net.named_parameters():
                 self.writer.add_histogram(f"Weights/{name}", param, self.learn_step_counter)
 

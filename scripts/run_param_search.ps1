@@ -22,10 +22,10 @@ foreach ($algo in $algos) {
                     $device = $devices[$job_id % $devices.Length]
                     $exp_name = "search_${dtype}_lr${lr}"
                     
-                    # Use 8 envs for DQN on server
-                    $cmd_args = "--algo dqn --dqn_type $dtype --env_name $env --lr $lr --seed $seed --num_envs 8 --device $device --total_timesteps $timesteps --exp_name $exp_name"
+                    # Use 16 envs for DQN on server (High throughput)
+                    $cmd_args = "--algo dqn --dqn_type $dtype --env_name $env --lr $lr --seed $seed --num_envs 16 --device $device --total_timesteps $timesteps --exp_name $exp_name"
                     
-                    Write-Host "Starting Job $job_id on $device : DQN-$dtype | LR: $lr | Seed: $seed | Envs: 8"
+                    Write-Host "Starting Job $job_id on $device : DQN-$dtype | LR: $lr | Seed: $seed | Envs: 16"
                     Start-Process python -ArgumentList $cmd_args -NoNewWindow
                     $job_id++
                     Start-Sleep -Seconds 2

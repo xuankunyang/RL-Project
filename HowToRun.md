@@ -24,8 +24,8 @@ RL-Project/
 python run.py --algo dqn --dqn_type dqn --env_name BreakoutNoFrameskip-v4 --seed 42 --device cuda:0
 
 # DQN with Vectorized Environments (Speed Up!)
-# Uses 8 CPU cores to collect data in parallel
-python run.py --algo dqn --dqn_type dqn --env_name BreakoutNoFrameskip-v4 --num_envs 8 --device cuda:0
+# Uses 16 CPU cores to collect data in parallel (Now Default for Script)
+python run.py --algo dqn --dqn_type dqn --env_name BreakoutNoFrameskip-v4 --num_envs 16 --device cuda:0
 
 # Double DQN
 python run.py --algo dqn --dqn_type double --env_name BreakoutNoFrameskip-v4 --seed 42 --device cuda:0
@@ -41,11 +41,11 @@ python run.py --algo ppo --env_name HalfCheetah-v4 --lr_actor 1e-4 --lr_critic 1
 ```
 
 ### Parameter Search (Multi-GPU)
-The updated script now compares `dqn_types` AND PPO Clipping variations (`0.2` vs `10.0`).
+The updated script now uses `num_envs=16` for high throughput on your server.
 ```powershell
 ./scripts/run_param_search.ps1
 ```
-This distributes jobs across your 4 GPUs.
+This distributes jobs across your 4 GPUs with optimized settings.
 
 ## 3. Algorithm Details & Logging
 
@@ -53,6 +53,13 @@ This distributes jobs across your 4 GPUs.
 - **Directory Structure**: `results/Region/Environment/Variant/Hyperparams_Timestamp/`
 - **Log File**: `log.txt` inside the run folder.
 - **Models**: `models/` subdirectory.
+
+### Performance Optimization (Update)
+- **`--num_envs 16`**: Utilizing 16 parallel envs per experiment to maximize CPU usage.
+- **`--eval_freq 50000`**: Reduced evaluation frequency to minimize training pauses.
+- **`uint8` Buffers**: Replay Buffer now uses `uint8` storage (4x memory saving) and normalizes on GPU. 
+- **No Rendering**: Disabled unnecessary rendering in env wrapper.
+- **Batch Insertion**: Buffer uses specialized `add_batch` for fast data movements.
 
 ### DQN Variants (`--dqn_type`)
 - **`dqn`**: Standard Nature DQN.
