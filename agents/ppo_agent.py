@@ -18,9 +18,13 @@ class PPOAgent:
         self.lr_actor = args.lr_actor if args.lr_actor is not None else args.lr
         self.lr_critic = args.lr_critic if args.lr_critic is not None else args.lr
         self.clip_range = args.ppo_clip
-        self.ppo_epochs = 10
-        self.mini_batch_size = 64
+        self.ppo_epochs = args.ppo_epochs
+        self.mini_batch_size = args.mini_batch_size
         self.hidden_dim = args.hidden_dim_ppo
+        self.vf_coef = args.vf_coef
+        self.ent_coef = args.ent_coef
+        self.horizon = args.horizon
+        self.gae_lambda = args.gae_lambda
         
         # Model
         if hasattr(env, "single_observation_space"):
@@ -49,14 +53,15 @@ class PPOAgent:
         else:
             self.num_envs = 1
         
-        self.rollout_len = 2048 // self.num_envs  # Adjust steps per env  
+        self.rollout_len = self.horizon // self.num_envs  # Adjust steps per env  
         self.buffer = RolloutBuffer(
             buffer_size=self.rollout_len, 
             state_shape=(self.state_dim,), 
             action_dim=self.action_dim,
             num_envs=self.num_envs,
             device=self.device, 
-            gamma=self.gamma
+            gamma=self.gamma,
+            gae_lambda=self.gae_lambda
         )
         
         self.update_step = 0
@@ -124,7 +129,7 @@ class PPOAgent:
                 value_loss = F.mse_loss(values, returns_batch)
                 
                 # Total loss
-                loss = policy_loss + 0.5 * value_loss - 0.01 * entropy.mean()
+                loss = policy_loss + self.vf_coef * value_loss - self.ent_coef * entropy.mean()
                 
                 # Optimize
                 self.optimizer.zero_grad()

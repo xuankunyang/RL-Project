@@ -69,15 +69,24 @@ def main():
     parser.add_argument('--learning_start', type=int, default=10000, help='Learning start steps')
 
     # === 超参数 (用于 Grid Search) ===
+    # DQN
     parser.add_argument('--update_freq', type=int, default=1000, help='Target network update frequency')
     parser.add_argument('--train_freq', type=int, default=4, help='Training frequency (train every N steps)')
     parser.add_argument('--hidden_dim_dqn', type=int, default=512, help='Hidden dimension for DQNs')
-    parser.add_argument('--hidden_dim_ppo', type=int, default=256, help='Hidden dimension for PPOs')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate (Shared default)')
+
+    # PPO
+    parser.add_argument('--hidden_dim_ppo', type=int, default=256, help='Hidden dimension for PPOs')
     parser.add_argument('--lr_actor', type=float, default=None, help='Actor Learning rate (if None, use --lr)')
     parser.add_argument('--lr_critic', type=float, default=None, help='Critic Learning rate (if None, use --lr)')
     parser.add_argument('--ppo_clip', type=float, default=0.2, help='PPO Clip range')
-    
+    parser.add_argument('--ppo_epochs', type=int, default=10, help='Number of PPO epochs')
+    parser.add_argument('--mini_batch_size', type=int, default=64, help='Mini batch size for PPO')
+    parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient for PPO')
+    parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient for PPO')
+    parser.add_argument('--horizon', type=int, default=2048, help='Number of steps to run for each environment')
+    parser.add_argument('--gae_lambda', type=float, default=0.95, help='GAE lambda for PPO')
+
     parser.add_argument('--batch_size', type=int, default=512, help='Batch size')
     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
     parser.add_argument('--num_envs', type=int, default=16, help='Number of parallel environments')
