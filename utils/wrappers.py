@@ -48,37 +48,36 @@ def make_mujoco_env(env_name, num_envs=1, seed=42):
     """
     创建一个经过预处理的 MuJoCo 环境 (PPO 专用)
     """
-    def make_env():
-        env = gym.make(env_name, render_mode="rgb_array")
-        
-        # 1. 记录真实分数 (必须在 Normalize 之前)
-        env = RecordEpisodeStatistics(env)
-        
-        # 2. Clip Action
-        env = ClipAction(env)
-        
-        # 3. Normalize Observation
-        env = NormalizeObservation(env)
-        
-        # === 修复点：显式传入 observation_space ===
-        # TransformObservation(env, func, observation_space)
-        env = TransformObservation(
-            env, 
-            lambda obs: np.clip(obs, -10, 10), 
-            env.observation_space
-        )
-        
-        # 4. Normalize Reward
-        env = NormalizeReward(env)
-        env = TransformReward(
-            env, 
-            lambda r: np.clip(r, -10, 10)
-        )
-        # TransformReward 通常不需要传入 space，因为 reward 在 gym 里没有严格的 space 定义
-        
-        return env
+    def make_env(rank):
+        def _thunk():
+            env = gym.make(env_name)  # 移除 render_mode 提速
+            
+            # 1. 记录真实分数 (必须在 Normalize 之前)
+            env = RecordEpisodeStatistics(env)
+            
+            # 2. Clip Action
+            env = ClipAction(env)
+            
+            # 3. Normalize Observation
+            env = NormalizeObservation(env)
+            env = TransformObservation(
+                env, 
+                lambda obs: np.clip(obs, -10, 10), 
+                env.observation_space
+            )
+            
+            # 4. Normalize Reward
+            env = NormalizeReward(env)
+            env = TransformReward(
+                env, 
+                lambda r: np.clip(r, -10, 10)
+            )
+            
+            return env
+        return _thunk
 
-    if num_envs > 0:
-        return gym.vector.SyncVectorEnv([make_env for _ in range(num_envs)])
+    if num_envs > 1:
+        # 使用 AsyncVectorEnv 更快
+        return gym.vector.AsyncVectorEnv([make_env(i) for i in range(num_envs)])
     else:
-        return make_env()
+        return make_env(0)()
