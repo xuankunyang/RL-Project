@@ -263,17 +263,26 @@ def main():
             next_state, reward, done, truncated, info = env.step(action)
             
             # 3. 手动累积和记录真实 reward（类似 DQN 的方式）
+            ep_rewards = []
             for i in range(args.num_envs):
-                # 注意：这里的 reward 已经是 normalized 的，但我们仍记录它
-                # RecordEpisodeStatistics 应该能捕获原始 reward
+                # 累积 reward 用于其他目的，但记录原始 episode reward
                 current_ep_reward[i] += reward[i]
-                
+
                 if done[i] or truncated[i]:
-                    # 记录 episode
-                    ep_reward = current_ep_reward[i]
-                    writer.add_scalar("Train/EpisodeReward", ep_reward, global_step + i)
+                    # 使用 RecordEpisodeStatistics 记录的原始 episode reward
+                    if "episode" in info and info["episode"]["r"][i] is not None:
+                        ep_reward = info["episode"]["r"][i]
+                    else:
+                        # fallback to accumulated (should not happen with RecordEpisodeStatistics)
+                        ep_reward = current_ep_reward[i]
+                    ep_rewards.append(ep_reward)
                     logger.info(f"Step {global_step} | Env {i} | Episode Reward: {ep_reward:.2f}")
                     current_ep_reward[i] = 0
+
+            # 记录平均 episode reward 到 TensorBoard
+            if ep_rewards:
+                avg_ep_reward = np.mean(ep_rewards)
+                writer.add_scalar("Train/EpisodeReward", avg_ep_reward, global_step)
             
             # 4. 存储到 Buffer (只存 done，不存 truncated)
             agent.buffer.add_batch(state, action, log_prob, reward, done, value)

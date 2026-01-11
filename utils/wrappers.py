@@ -57,20 +57,13 @@ def make_mujoco_env(env_name, num_envs=1, seed=42):
             
             # 2. Clip Action
             env = ClipAction(env)
-            
+
             # 3. Normalize Observation
             env = NormalizeObservation(env)
             env = TransformObservation(
-                env, 
-                lambda obs: np.clip(obs, -10, 10), 
+                env,
+                lambda obs: np.clip(obs, -10, 10),
                 env.observation_space
-            )
-            
-            # 4. Normalize Reward
-            env = NormalizeReward(env)
-            env = TransformReward(
-                env, 
-                lambda r: np.clip(r, -10, 10)
             )
             
             return env
