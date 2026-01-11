@@ -29,7 +29,7 @@ class DQNAgent:
         self.use_double = self.dqn_type in ['double', 'rainbow']
         self.use_dueling = self.dqn_type in ['dueling', 'rainbow']
         self.use_per = self.dqn_type == 'rainbow'
-        self.use_n_step = self.dqn_type == 'rainbow'
+        self.use_n_step = False
         
         # Model
         if hasattr(env, "single_action_space"):
