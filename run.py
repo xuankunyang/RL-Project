@@ -69,6 +69,7 @@ def main():
 
     # === 超参数 (用于 Grid Search) ===
     parser.add_argument('--update_freq', type=int, default=1000, help='Target network update frequency')
+    parser.add_argument('--train_freq', type=int, default=4, help='Training frequency (train every N steps)')
     parser.add_argument('--hidden_dim_dqn', type=int, default=512, help='Hidden dimension for DQNs')
     parser.add_argument('--hidden_dim_ppo', type=int, default=256, help='Hidden dimension for PPOs')
     parser.add_argument('--lr', type=float, default=3e-4, help='Learning rate (Shared default)')
@@ -269,8 +270,9 @@ def main():
                 state = next_state
                 global_step += args.num_envs
             
-            # Train
-            agent.learn()
+            # Train every train_freq steps (for efficiency)
+            if global_step % args.train_freq == 0:
+                agent.learn()
             
         elif args.algo == 'ppo':
             # PPO (Forces num_envs=1 currently)

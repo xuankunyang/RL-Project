@@ -88,7 +88,8 @@ This distributes jobs across your 4 GPUs with optimized settings.
 | `--lr_actor` | `None` | Actor LR (PPO). Defaults to --lr. |
 | `--lr_critic` | `None` | Critic LR (PPO). Defaults to --lr. |
 | `--ppo_clip` | `0.2` | PPO Clipping range. |
-| `--num_envs` | `1` | Number of parallel envs (DQN). |
+| `--num_envs` | `16` | Number of parallel envs (DQN). |
+| `--train_freq` | `4` | Training frequency (train every N steps). |
 | `--hidden_dim_dqn` | `512` | Hidden dim for DQN. |
 | `--hidden_dim_ppo` | `256` | Hidden dim for PPO. |
 
