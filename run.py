@@ -27,7 +27,8 @@ def evaluate(agent, env_name, algo, seed, episodes=5):
     if algo == 'dqn':
         eval_env = make_atari_env(env_name)
     else:
-        eval_env = make_mujoco_env(env_name)
+        # 使用未经 normalize 的环境进行评估
+        eval_env = gym.make(env_name)
     
     # set_seed(seed + 100, eval_env)
     
@@ -260,20 +261,20 @@ def main():
             # 2. Step Environment
             next_state, reward, done, truncated, info = env.step(action)
             
-            # 3. 记录真实 Episode Reward (从 RecordEpisodeStatistics wrapper 获取)
-            if "final_info" in info:
-                for idx, final_info in enumerate(info["final_info"]):
-                    if final_info and "episode" in final_info:
-                        real_reward = final_info["episode"]["r"]
-                        ep_len = final_info["episode"]["l"]
-                        
-                        # 记录到 Tensorboard 和日志
-                        writer.add_scalar("Train/EpisodeReward", real_reward, global_step)
-                        writer.add_scalar("Train/EpisodeLen", ep_len, global_step)
-                        logger.info(f"Step {global_step} | Env {idx} | Episode Reward: {real_reward:.2f} | Length: {ep_len}")
+            # 3. 手动累积和记录真实 reward（类似 DQN 的方式）
+            for i in range(args.num_envs):
+                # 注意：这里的 reward 已经是 normalized 的，但我们仍记录它
+                # RecordEpisodeStatistics 应该能捕获原始 reward
+                current_ep_reward[i] += reward[i]
+                
+                if done[i] or truncated[i]:
+                    # 记录 episode
+                    ep_reward = current_ep_reward[i]
+                    writer.add_scalar("Train/EpisodeReward", ep_reward, global_step + i)
+                    logger.info(f"Step {global_step} | Env {i} | Episode Reward: {ep_reward:.2f}")
+                    current_ep_reward[i] = 0
             
-            # 4. 存储到 Buffer (注意：只存 done，不存 truncated)
-            # 这样 GAE 在 truncated 时会正确 bootstrap
+            # 4. 存储到 Buffer (只存 done，不存 truncated)
             agent.buffer.add_batch(state, action, log_prob, reward, done, value)
             
             state = next_state
