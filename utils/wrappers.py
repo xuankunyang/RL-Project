@@ -2,9 +2,13 @@ import gymnasium as gym
 import numpy as np
 import ale_py  # Register ALE environments
 from gymnasium.wrappers import (
-    AtariPreprocessing,
-    TransformReward,
-    FrameStackObservation
+    RecordEpisodeStatistics, 
+    ClipAction, 
+    NormalizeObservation, 
+    TransformObservation, 
+    NormalizeReward, 
+    TransformReward, 
+    AtariPreprocessing
 )
 
 
@@ -41,29 +45,40 @@ def make_atari_env(env_name, num_envs=1, seed=42):
 
 
 def make_mujoco_env(env_name, num_envs=1, seed=42):
+    """
+    创建一个经过预处理的 MuJoCo 环境 (PPO 专用)
+    """
     def make_env():
-        # render_mode 设为 rgb_array 是为了防止服务器报错，同时允许后续 eval 时存视频
         env = gym.make(env_name, render_mode="rgb_array")
         
-        # 1. 最先加 RecordEpisodeStatistics，记录原始分数为 "episode" -> "r"
+        # 1. 记录真实分数 (必须在 Normalize 之前)
         env = RecordEpisodeStatistics(env)
         
-        # 2. ClipAction: 确保动作在 [-1, 1] 之间 (PPO 输出通常是高斯，需要截断)
+        # 2. Clip Action
         env = ClipAction(env)
         
-        # 3. Normalize Observation (PPO 核心) + Clip
+        # 3. Normalize Observation
         env = NormalizeObservation(env)
-        env = TransformObservation(env, lambda obs: np.clip(obs, -10, 10))
         
-        # 4. Normalize Reward (PPO 核心) + Clip
-        # 这一步之后，env.step() 返回的 reward 就会变成很小的值
+        # === 修复点：显式传入 observation_space ===
+        # TransformObservation(env, func, observation_space)
+        env = TransformObservation(
+            env, 
+            lambda obs: np.clip(obs, -10, 10), 
+            env.observation_space
+        )
+        
+        # 4. Normalize Reward
         env = NormalizeReward(env)
-        env = TransformReward(env, lambda r: np.clip(r, -10, 10))
+        env = TransformReward(
+            env, 
+            lambda r: np.clip(r, -10, 10)
+        )
+        # TransformReward 通常不需要传入 space，因为 reward 在 gym 里没有严格的 space 定义
         
         return env
 
-    if num_envs > 1:
-        # 推荐使用 SyncVectorEnv，MuJoCo 下速度通常优于 Async
+    if num_envs > 0:
         return gym.vector.SyncVectorEnv([make_env for _ in range(num_envs)])
     else:
         return make_env()
