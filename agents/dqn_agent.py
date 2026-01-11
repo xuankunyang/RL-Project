@@ -19,8 +19,8 @@ class DQNAgent:
         self.batch_size = args.batch_size
         self.target_update_freq = args.update_freq
         self.epsilon_start = 1.0
-        self.epsilon_final = 0.05
-        self.epsilon_decay = 100000
+        self.epsilon_final = 0.01
+        self.epsilon_decay = 500000
         self.learning_rate = args.lr
         self.learn_step_counter = 0
         self.hidden_dim = args.hidden_dim_dqn
@@ -69,14 +69,20 @@ class DQNAgent:
                 self.buffer = base_buffer
         else:
             self.buffer = ReplayBuffer(capacity=100000, state_shape=input_shape, device=self.device)
+    
+    def get_epsilon(self, step):
+        if step >= self.epsilon_decay:
+            return self.epsilon_final
+        else:
+            return self.epsilon_start - (self.epsilon_start - self.epsilon_final) * (step / self.epsilon_decay)
+
 
     def select_action(self, state, steps_done, eval_mode=False):
         # Epsilon-Greedy
         if eval_mode:
             epsilon = 0.001
         else:
-            epsilon = self.epsilon_final + (self.epsilon_start - self.epsilon_final) * \
-                      np.exp(-1. * steps_done / self.epsilon_decay)
+            epsilon = self.get_epsilon(step=steps_done)
         
         # Check if state is batched (N, C, H, W) or single (C, H, W)
         # We assume VectorEnv returns (N, C, H, W) as numpy array
