@@ -103,7 +103,7 @@ def main():
              variant = f"DQN_{args.dqn_type}"
              
         # Key Hyperparams for run folder
-        hp_str = f"lr{args.lr}_sd{args.seed}_bs{args.batch_size}_env{args.num_envs}"
+        hp_str = f"lr{args.lr}_uf{args.update_freq}_sd{args.seed}_bs{args.batch_size}_env{args.num_envs}"
     else:
         domain = "MuJoCo"
         # Variant Name (Folder Level)
