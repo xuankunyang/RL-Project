@@ -77,8 +77,8 @@ def main():
 
     # PPO
     parser.add_argument('--hidden_dim_ppo', type=int, default=256, help='Hidden dimension for PPOs')
-    parser.add_argument('--lr_actor', type=float, default=None, help='Actor Learning rate (if None, use --lr)')
-    parser.add_argument('--lr_critic', type=float, default=None, help='Critic Learning rate (if None, use --lr)')
+    parser.add_argument('--lr_actor', type=float, default=3e-4, help='Actor Learning rate (if None, use --lr)')
+    parser.add_argument('--lr_critic', type=float, default=1e-3, help='Critic Learning rate (if None, use --lr)')
     parser.add_argument('--ppo_clip', type=float, default=0.2, help='PPO Clip range')
     parser.add_argument('--ppo_epochs', type=int, default=10, help='Number of PPO epochs')
     parser.add_argument('--mini_batch_size', type=int, default=64, help='Mini batch size for PPO')
