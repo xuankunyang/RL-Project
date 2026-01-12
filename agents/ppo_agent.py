@@ -126,7 +126,7 @@ class PPOAgent:
                 policy_loss = -torch.min(surr1, surr2).mean()
                 
                 # Value loss
-                value_loss = F.mse_loss(values, returns_batch)
+                value_loss = F.smooth_l1_loss(values, returns_batch)
                 
                 # Total loss
                 loss = policy_loss + self.vf_coef * value_loss - self.ent_coef * entropy.mean()

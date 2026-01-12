@@ -21,6 +21,10 @@ def set_seed(seed, env):
     # env.action_space.seed(seed)
     # env.observation_space.seed(seed)
 
+from gymnasium.wrappers import NormalizeObservation, ClipAction, TransformObservation
+import gymnasium as gym
+import numpy as np
+
 def evaluate(agent, env_name, algo, seed, episodes=5):
     """
     Evaluation loop
@@ -28,9 +32,23 @@ def evaluate(agent, env_name, algo, seed, episodes=5):
     if algo == 'dqn':
         eval_env = make_atari_env(env_name)
     else:
-        # 使用未经 normalize 的环境进行评估
+        # === 修正部分开始 ===
+        # 1. 基础环境
         eval_env = gym.make(env_name)
+        
+        # 2. 动作截断 (必须加，防止 Agent 输出超出 [-1, 1] 的非法动作)
+        eval_env = ClipAction(eval_env)
+        
+        # 3. 观测归一化 (核心！！！必须加)
+        # Agent 的大脑是基于归一化数据训练的，这里必须保持一致
+        eval_env = NormalizeObservation(eval_env)
+        eval_env = TransformObservation(eval_env, lambda obs: np.clip(obs, -10, 10), eval_env.observation_space)
+        
+        # 4. 注意：这里千万【不要】加 NormalizeReward！！！
+        # 我们评估是要看真实分数的。
+        # === 修正部分结束 ===
     
+    # 稍微改变一点种子，避免评估到完全一样的轨迹（可选）
     # set_seed(seed + 100, eval_env)
     
     returns = []
@@ -39,16 +57,25 @@ def evaluate(agent, env_name, algo, seed, episodes=5):
         done = False
         truncated = False
         episode_reward = 0
+        
         while not (done or truncated):
-            # Different select_action signatures for DQN vs PPO
             if algo == 'dqn':
                 action = agent.select_action(state, steps_done=0, eval_mode=True)
             else:  # PPO
+                # PPO Select Action 返回的是 (action, log_prob, value)
+                # 评估时我们只需要 action
                 action, _, _ = agent.select_action(state, eval_mode=True)
+                
+                # 处理维度问题：
+                # 如果是 SyncVectorEnv 训练出来的 Agent，select_action 可能返回 (1, action_dim)
+                # 而这里的 eval_env 是单环境，step 需要 (action_dim,)
+                if isinstance(action, np.ndarray) and len(action.shape) > 1:
+                    action = action[0]
             
             next_state, reward, done, truncated, _ = eval_env.step(action)
             episode_reward += reward
             state = next_state
+            
         returns.append(episode_reward)
     
     eval_env.close()
@@ -119,7 +146,7 @@ def main():
              variant = f"DQN_{args.dqn_type}"
              
         # Key Hyperparams for run folder
-        hp_str = f"lr{args.lr}_uf{args.update_freq}_sd{args.seed}_bs{args.batch_size}_env{args.num_envs}"
+        hp_str = f"lr{args.lr}_uf{args.update_freq}_sd{args.seed}_hd{args.hidden_dim_dqn}_bs{args.batch_size}_env{args.num_envs}"
     else:
         domain = "MuJoCo"
         # Variant Name (Folder Level)
@@ -128,7 +155,7 @@ def main():
         else:
              variant = "PPO_Standard"
         
-        hp_str = f"lra{args.lr_actor}_lrc{args.lr_critic}_clp{args.ppo_clip}_sd{args.seed}_env{args.num_envs}"
+        hp_str = f"lra{args.lr_actor}_lrc{args.lr_critic}_clp{args.ppo_clip}_sd{args.seed}_hd{args.hidden_dim_ppo}_env{args.num_envs}"
 
     # 2. Timestamp
     timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
