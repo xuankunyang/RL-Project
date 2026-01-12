@@ -30,7 +30,7 @@ def make_atari_env(env_name, num_envs=1, seed=42):
                 noop_max=30, 
                 frame_skip=1,  # v5 already handles frame skip, set to 1
                 screen_size=84, 
-                terminal_on_life_loss=False,  
+                terminal_on_life_loss=True,  
                 grayscale_obs=True,
                 scale_obs=False  # Return uint8 (0-255) to save RAM/Bandwidth
             )

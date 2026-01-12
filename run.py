@@ -92,7 +92,7 @@ def main():
     
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--device', type=str, default='cuda:0', help='Device (cuda:0, cuda:1, cpu)')
-    parser.add_argument('--total_timesteps', type=int, default=1000000, help='Total training steps')
+    parser.add_argument('--total_timesteps', type=int, default=5000000, help='Total training steps')
     parser.add_argument('--exp_name', type=str, default='default_exp', help='Experiment name for logging')
     parser.add_argument('--eval_freq', type=int, default=50000, help='Evaluation frequency')
 
@@ -102,10 +102,11 @@ def main():
     parser.add_argument('--train_freq', type=int, default=4, help='Training frequency (train every N steps)')
     parser.add_argument('--hidden_dim_dqn', type=int, default=512, help='Hidden dimension for DQNs')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate (Shared default)')
-    parser.add_argument('--epsilon_decay', type=float, default=500000, help='Epsilon decay steps')
+    parser.add_argument('--epsilon_decay', type=float, default=1000000, help='Epsilon decay steps')
     parser.add_argument('--epsilon_final', type=float, default=0.01, help='Minimum epsilon value')
     parser.add_argument('--epsilon_start', type=float, default=1.0, help='Initial epsilon value')
     parser.add_argument('--learning_start', type=int, default=10000, help='Learning start steps')
+    parser.add_argument('--batch_size', type=int, default=64, help='Batch size')
 
     # PPO
     parser.add_argument('--hidden_dim_ppo', type=int, default=256, help='Hidden dimension for PPOs')
@@ -119,7 +120,6 @@ def main():
     parser.add_argument('--horizon', type=int, default=2048, help='Number of steps to run for each environment')
     parser.add_argument('--gae_lambda', type=float, default=0.95, help='GAE lambda for PPO')
 
-    parser.add_argument('--batch_size', type=int, default=512, help='Batch size')
     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
     parser.add_argument('--num_envs', type=int, default=16, help='Number of parallel environments')
     
