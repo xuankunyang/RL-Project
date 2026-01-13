@@ -5,7 +5,7 @@
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 MAX_JOBS=8                 # DQN 并发数 (考虑到你还有 PPO 在跑，设为 4 很稳)
-DEVICES=("cuda:0" "cuda:1" "cuda:2" "cuda:3") # 双卡轮询
+DEVICES=("cuda:0" "cuda:1") # 双卡轮询
 
 # 2. 环境设置
 # 建议选 Breakout，因为 Pong 太简单了，参数差异看不出来

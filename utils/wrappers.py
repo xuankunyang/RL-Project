@@ -87,6 +87,7 @@ def make_atari_env(env_name, num_envs=1, seed=42, is_training=True):
 def make_mujoco_env(env_name, num_envs=1, seed=42):
     """
     创建一个经过预处理的 MuJoCo 环境 (PPO 专用)
+    这里需要修改一下！！！！！统一一下！！！！！
     """
     def make_env(rank):
         def _thunk():

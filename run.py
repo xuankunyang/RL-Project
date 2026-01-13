@@ -107,6 +107,7 @@ def main():
     parser.add_argument('--epsilon_start', type=float, default=1.0, help='Initial epsilon value')
     parser.add_argument('--learning_start', type=int, default=10000, help='Learning start steps')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
+    parser.add_argument('--buffer_size', type=int, default=100000, help='Buffer size')
 
     # PPO
     parser.add_argument('--hidden_dim_ppo', type=int, default=256, help='Hidden dimension for PPOs')

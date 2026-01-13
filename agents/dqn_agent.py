@@ -25,6 +25,7 @@ class DQNAgent:
         self.learn_step_counter = 0
         self.hidden_dim = args.hidden_dim_dqn
         self.learning_start = args.learning_start
+        self.buffer_size = args.buffer_size
         
         # Flags based on dqn_type
         self.use_double = self.dqn_type in ['double', 'rainbow']
@@ -63,13 +64,13 @@ class DQNAgent:
             # For this implementations, lets use Prioritized Buffer for Rainbow
             # And NStepReplayBuffer for n_step logic IF we want.
             # Merging them: NStepReplayBuffer where self.buffer is PrioritizedReplayBuffer.
-            base_buffer = PrioritizedReplayBuffer(capacity=100000, state_shape=input_shape, device=self.device)
+            base_buffer = PrioritizedReplayBuffer(capacity=self.buffer_size, state_shape=input_shape, device=self.device)
             if self.use_n_step:
-                self.buffer = NStepReplayBuffer(capacity=100000, state_shape=input_shape, device=self.device, target_buffer=base_buffer, n_step=3, gamma=self.gamma)
+                self.buffer = NStepReplayBuffer(capacity=self.buffer_size, state_shape=input_shape, device=self.device, target_buffer=base_buffer, n_step=3, gamma=self.gamma)
             else:
                 self.buffer = base_buffer
         else:
-            self.buffer = ReplayBuffer(capacity=100000, state_shape=input_shape, device=self.device)
+            self.buffer = ReplayBuffer(capacity=self.buffer_size, state_shape=input_shape, device=self.device)
     
     def get_epsilon(self, step):
         if step >= self.epsilon_decay:
@@ -94,6 +95,8 @@ class DQNAgent:
              # Batched case: (N, C, H, W)
              state_t = torch.FloatTensor(state).to(self.device)
              scalar_output = False
+
+        state_t = state_t / 255.0
         
         if not eval_mode and random.random() < epsilon:
             # Random Action
@@ -104,10 +107,6 @@ class DQNAgent:
                 return np.random.randint(0, self.action_dim, size=(batch_size,)) # Array (N,)
         else:
             with torch.no_grad():
-                # Normalize here if uint8 input
-                if state_t.dtype == torch.uint8:
-                     state_t = state_t.float() / 255.0
-                     
                 q_values = self.q_net(state_t)
                 actions = q_values.max(1)[1].cpu().numpy() # Return (N,)
             
