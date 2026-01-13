@@ -24,6 +24,7 @@ class DQNAgent:
         self.learning_rate = args.lr
         self.learn_step_counter = 0
         self.hidden_dim = args.hidden_dim_dqn
+        self.learning_start = args.learning_start
         
         # Flags based on dqn_type
         self.use_double = self.dqn_type in ['double', 'rainbow']
@@ -44,7 +45,7 @@ class DQNAgent:
         self.target_net.load_state_dict(self.q_net.state_dict())
         self.target_net.eval()
         
-        self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.learning_rate, eps=1e-4)
         
         # Buffer
         if self.use_per:
@@ -76,13 +77,12 @@ class DQNAgent:
         else:
             return self.epsilon_start - (self.epsilon_start - self.epsilon_final) * (step / self.epsilon_decay)
 
-
     def select_action(self, state, steps_done, eval_mode=False):
         # Epsilon-Greedy
         if eval_mode:
-            epsilon = 0.001
+            epsilon = 0.0
         else:
-            epsilon = self.get_epsilon(step=steps_done)
+            epsilon = self.get_epsilon(step=steps_done - self.learning_start)
         
         # Check if state is batched (N, C, H, W) or single (C, H, W)
         # We assume VectorEnv returns (N, C, H, W) as numpy array

@@ -30,7 +30,7 @@ def evaluate(agent, env_name, algo, seed, episodes=5):
     Evaluation loop
     """
     if algo == 'dqn':
-        eval_env = make_atari_env(env_name)
+        eval_env = make_atari_env(env_name, is_training=False)
     else:
         # === 修正部分开始 ===
         # 1. 基础环境
@@ -102,11 +102,11 @@ def main():
     parser.add_argument('--train_freq', type=int, default=4, help='Training frequency (train every N steps)')
     parser.add_argument('--hidden_dim_dqn', type=int, default=512, help='Hidden dimension for DQNs')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate (Shared default)')
-    parser.add_argument('--epsilon_decay', type=float, default=1000000, help='Epsilon decay steps')
+    parser.add_argument('--epsilon_decay', type=float, default=2000000, help='Epsilon decay steps')
     parser.add_argument('--epsilon_final', type=float, default=0.01, help='Minimum epsilon value')
     parser.add_argument('--epsilon_start', type=float, default=1.0, help='Initial epsilon value')
     parser.add_argument('--learning_start', type=int, default=10000, help='Learning start steps')
-    parser.add_argument('--batch_size', type=int, default=64, help='Batch size')
+    parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
 
     # PPO
     parser.add_argument('--hidden_dim_ppo', type=int, default=256, help='Hidden dimension for PPOs')
@@ -191,7 +191,7 @@ def main():
 
     # 2. 环境选择与 Agent 初始化
     if args.algo == 'dqn':
-        env = make_atari_env(args.env_name, num_envs=args.num_envs, seed=args.seed)
+        env = make_atari_env(args.env_name, num_envs=args.num_envs, seed=args.seed, is_training=True)
         # VectorEnv seeding handled inside or via seed arg if passed (AsyncVectorEnv doesn't inherently take seed in init list easily without wrapper, 
         # but our make_env(rank) architecture handles it if we passed seed, actually we didn't pass seed to make_env yet in wrappers.py properly?
         # Let's re-verify wrappers.py logic. make_env(rank) doesn't use seed. 
@@ -279,8 +279,14 @@ def main():
                 global_step += args.num_envs
             
             # Train every train_freq steps (for efficiency)
-            if global_step % args.train_freq == 0 and global_step >= args.learning_start:
-                agent.learn()
+            if global_step >= args.learning_start:
+                # 计算需要更新多少次
+                # 例如: num_envs=8, train_freq=4. 我们应该更新 8/4 = 2 次
+                # 至少更新 1 次
+                gradient_updates = max(1, args.num_envs // args.train_freq)
+                
+                for _ in range(gradient_updates):
+                    agent.learn()
             
         elif args.algo == 'ppo':
             # 1. Select Action
