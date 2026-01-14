@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # 导入我们定义的模块
 from utils.wrappers import make_atari_env, make_mujoco_env
-from agents.dqn_agent import DQNAgent 
+from agents.dqn_agent import DQNAgent
 from agents.ppo_agent import PPOAgent 
 
 def set_seed(seed, env):
@@ -151,10 +151,7 @@ def main():
     else:
         domain = "MuJoCo"
         # Variant Name (Folder Level)
-        if args.ppo_clip > 0.5: 
-             variant = "PPO_NoClip"
-        else:
-             variant = "PPO_Standard"
+        variant = "PPO_Standard"
         
         hp_str = f"lra{args.lr_actor}_lrc{args.lr_critic}_clp{args.ppo_clip}_sd{args.seed}_hd{args.hidden_dim_ppo}_env{args.num_envs}"
 
