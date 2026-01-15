@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-# --- 1. Atari Visual Network (Dueling Architecture) ---
 # --- 1. Atari Visual Network (Configurable Dueling) ---
 class QNetwork(nn.Module):
     def __init__(self, input_shape, num_actions, use_dueling=True, hidden_dim=512):

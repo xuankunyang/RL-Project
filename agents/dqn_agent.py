@@ -30,8 +30,6 @@ class DQNAgent:
         # Flags based on dqn_type
         self.use_double = self.dqn_type in ['double', 'rainbow']
         self.use_dueling = self.dqn_type in ['dueling', 'rainbow']
-        self.use_per = self.dqn_type == 'rainbow'
-        self.use_n_step = self.dqn_type == 'rainbow'
         
         # Model
         if hasattr(env, "single_action_space"):
@@ -48,29 +46,7 @@ class DQNAgent:
         
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.learning_rate, eps=1e-4)
         
-        # Buffer
-        if self.use_per:
-            # Rainbow with 3-step
-            if self.use_n_step:
-                 # TODO: N-step wrapping logic is simpler if managed outside, 
-                 # but here we can wrap our PER buffer with NStep wrapper if we designed it that way
-                 # For simplicity in this structure: Separate N-step logic? 
-                 # Let's use NStepReplayBuffer which internally uses a standard ReplayBuffer
-                 # To combine PER + NStep, we need NStepBuffer to use PER.
-                 # Let's tweak this: if Rainbow, use PrioritizedReplayBuffer and handle n-step accumulation manually or via wrapper.
-                 # For now, let's just stick to PrioritizedReplayBuffer for Rainbow to keep it safe, 
-                 # AND add N-step if possible.
-                 pass
-            # For this implementations, lets use Prioritized Buffer for Rainbow
-            # And NStepReplayBuffer for n_step logic IF we want.
-            # Merging them: NStepReplayBuffer where self.buffer is PrioritizedReplayBuffer.
-            base_buffer = PrioritizedReplayBuffer(capacity=self.buffer_size, state_shape=input_shape, device=self.device)
-            if self.use_n_step:
-                self.buffer = NStepReplayBuffer(capacity=self.buffer_size, state_shape=input_shape, device=self.device, target_buffer=base_buffer, n_step=3, gamma=self.gamma)
-            else:
-                self.buffer = base_buffer
-        else:
-            self.buffer = ReplayBuffer(capacity=self.buffer_size, state_shape=input_shape, device=self.device)
+        self.buffer = ReplayBuffer(capacity=self.buffer_size, state_shape=input_shape, device=self.device)
     
     def get_epsilon(self, step):
         if step >= self.epsilon_decay:
@@ -121,12 +97,8 @@ class DQNAgent:
         
         self.learn_step_counter += 1
         
-        # Sample
-        if self.use_per:
-            states, actions, rewards, next_states, dones, weights, indices = self.buffer.sample(self.batch_size)
-        else:
-            states, actions, rewards, next_states, dones = self.buffer.sample(self.batch_size)
-            weights = torch.ones_like(rewards)
+
+        states, actions, rewards, next_states, dones = self.buffer.sample(self.batch_size)
         
         # Normalize batch (if not already float)
         # ReplayBuffer currently returns FloatTensor even if stored as uint8 (it converts in sample)
@@ -151,13 +123,11 @@ class DQNAgent:
                 # Vanilla DQN
                 next_target_q = self.target_net(next_states).max(dim=1, keepdim=True)[0]
                 
-            # N-step Gamma
-            gamma_val = (self.gamma ** 3) if (self.use_n_step and self.use_per) else self.gamma
-            target_q = rewards + (1 - dones) * gamma_val * next_target_q
+            target_q = rewards + (1 - dones) * self.gamma * next_target_q
             
         # Loss
         loss_elementwise = F.smooth_l1_loss(current_q, target_q, reduction='none')
-        loss = (loss_elementwise * weights).mean()
+        loss = loss_elementwise.mean()
         
         # Optimize
         self.optimizer.zero_grad()
@@ -173,15 +143,6 @@ class DQNAgent:
         
         torch.nn.utils.clip_grad_norm_(self.q_net.parameters(), 10)
         self.optimizer.step()
-        
-        # Update Priorities (PER)
-        if self.use_per:
-            td_errors = (target_q - current_q).abs().detach().cpu().numpy()
-            # If wrapped in NStepBuffer, accessing the inner buffer
-            if isinstance(self.buffer, NStepReplayBuffer):
-                self.buffer.buffer.update_priorities(indices, td_errors + 1e-6)
-            else:
-                self.buffer.update_priorities(indices, td_errors + 1e-6)
 
         # Logging
         if self.learn_step_counter % 100 == 0:

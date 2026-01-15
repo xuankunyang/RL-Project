@@ -61,7 +61,7 @@ for param in "${PARAMS[@]}"; do
         # 注意：这里我们针对 DQN 传入特定参数
         python run.py \
             --algo dqn \
-            --dqn_type dueling \
+            --dqn_type rainbow \
             --env_name $ENV_NAME \
             --total_timesteps $TOTAL_STEPS \
             --num_envs $NUM_ENVS \
