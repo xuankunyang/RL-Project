@@ -35,6 +35,7 @@ class FireResetWrapper(gym.Wrapper):
 
 def make_atari_env(env_name, num_envs=1, seed=42, is_training=True):
     """
+    针对 Breakout：
     is_training=True:  开启 LifeLoss (掉命即Done), 开启 RewardClip (训练稳定)
     is_training=False: 关闭 LifeLoss (玩满全场), 关闭 RewardClip (看真实分数)
     """
@@ -54,23 +55,32 @@ def make_atari_env(env_name, num_envs=1, seed=42, is_training=True):
             env = RecordEpisodeStatistics(env)
             
             # 2. Atari 预处理
-            env = AtariPreprocessing(
-                env, 
-                noop_max=30, 
-                frame_skip=4, 
-                screen_size=84, 
-                # 【关键点 2】训练时掉命算死，评估时掉命不算死
-                terminal_on_life_loss=is_training, 
-                grayscale_obs=True,
-                scale_obs=False
-            )
-            
             if 'Breakout' in env_name:
+                env = AtariPreprocessing(
+                    env, 
+                    noop_max=30, 
+                    frame_skip=4, 
+                    screen_size=84, 
+                    # 【关键点 2】Breakout 训练时掉命算死，评估时掉命不算死
+                    terminal_on_life_loss=is_training, 
+                    grayscale_obs=True,
+                    scale_obs=False
+                )
                 env = FireResetWrapper(env)
+            else:
+                env = AtariPreprocessing(
+                    env, 
+                    noop_max=30, 
+                    frame_skip=4, 
+                    screen_size=84, 
+                    grayscale_obs=True,
+                    scale_obs=False
+                )
             
             # === 【关键点 3】只在训练时 Clip Reward ===
             # 评估时我们需要 agent 跑出真实分数，虽然 agent 内部还是基于 clipped 经验学的
             # 但这里环境返回的 reward 我们希望是真实的（方便 evaluate 函数累加）
+            # 对于 Pong 不影响
             if is_training:
                 env = TransformReward(env, lambda r: np.sign(r))
             

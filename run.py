@@ -85,7 +85,7 @@ def main():
     parser = argparse.ArgumentParser(description='RL Final Project')
     
     # === 基础设置 ===
-    parser.add_argument('--env_name', type=str, default='ALE/Pong-v5', help='Gym environment name')
+    parser.add_argument('--env_name', type=str, default='ALE/Breakout-v5', help='Gym environment name')
     parser.add_argument('--algo', type=str, default='dqn', choices=['dqn', 'ppo'], help='Algorithm to use')
     # DQN Variants
     parser.add_argument('--dqn_type', type=str, default='dqn', choices=['dqn', 'double', 'dueling', 'rainbow'], help='DQN Variant')
