@@ -8,9 +8,8 @@ MAX_JOBS=8                 # DQN 并发数 (考虑到你还有 PPO 在跑，设�
 DEVICES=("cuda:0" "cuda:1") # 双卡轮询
 
 # 2. 环境设置
-# 建议选 Breakout，因为 Pong 太简单了，参数差异看不出来
-ENV_NAME="ALE/Breakout-v5"
-TOTAL_STEPS=5000000         # Atari 通常需要 5M - 10M 步才能收敛
+ENV_NAME="ALE/Pong-v5"
+TOTAL_STEPS=2000000         # Atari 通常需要 5M - 10M 步才能收敛
 NUM_ENVS=16                  # DQN 建议设为 8 (比 16 省显存，且样本相关性更低)
 
 # 3. 参数网格 (Grid Search)

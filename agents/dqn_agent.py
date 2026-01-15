@@ -5,7 +5,7 @@ import numpy as np
 import random
 import os
 from models.networks import QNetwork
-from utils.buffers import ReplayBuffer, PrioritizedReplayBuffer, NStepReplayBuffer
+from utils.buffers import ReplayBuffer
 
 class DQNAgent:
     def __init__(self, env, args, writer):
