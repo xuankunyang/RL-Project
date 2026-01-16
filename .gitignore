@@ -10,5 +10,7 @@ videos/
 results/
 results
 
+report/
+
 # System
 .DS_Store
