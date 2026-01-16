@@ -11,7 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 # 导入我们定义的模块
 from utils.wrappers import make_atari_env, make_mujoco_env
 from agents.dqn_agent import DQNAgent
-from agents.ppo_agent import PPOAgent 
+from agents.ppo_agent import PPOAgent
 
 def set_seed(seed, env):
     torch.manual_seed(seed)

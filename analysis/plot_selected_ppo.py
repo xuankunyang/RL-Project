@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 import pickle
+import argparse
 
 # Set style
 plt.style.use('seaborn-v0_8')
@@ -101,7 +102,7 @@ def find_experiment_dirs(results_dir, selected_configs):
 
     return exp_dirs
 
-def plot_curve(data_dict, tag, ema_alpha=0.1, save_dir='results/MuJoCo/HalfCheetah-v4/PPO_Standard/analysis'):
+def plot_curve(data_dict, tag, ema_alpha=0.1, save_dir='results/MuJoCo/HalfCheetah-v4/PPO_Standard/analysis', env_name='HalfCheetah-v4'):
     """Plot a single curve for all configurations."""
     os.makedirs(save_dir, exist_ok=True)
 
@@ -144,38 +145,60 @@ def plot_curve(data_dict, tag, ema_alpha=0.1, save_dir='results/MuJoCo/HalfCheet
 
     ax.set_xlabel('Training Steps')
     ax.set_ylabel(tag)
-    title_suffix = f'(EMA α={ema_alpha})' if is_reward_curve else f'(EMA α={ema_alpha}, scatter + mean)'
-    # ax.set_title(f'{tag} {title_suffix}')
+    # ax.set_title(f'{env_name} - {tag.replace("/", " - ")} Comparison (EMA α={ema_alpha})')
     ax.legend()
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    save_path = os.path.join(save_dir, f'{tag.replace("/", "_")}_comparison.png')
+    save_path = os.path.join(save_dir, f'{tag.replace("/", "_")}_ppo_{env_name.replace("-", "_")}_comparison.png')
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved plot: {save_path}")
 
-def main():
-    import argparse
+def get_selected_configs_for_env(env_name):
+    """Get selected configurations for a specific environment."""
+    # Define configurations for each environment
+    env_configs = {
+        'HalfCheetah-v4': [
+            (1e-4, 1e-4, 256, 42),
+            (5e-5, 2e-4, 256, 42),
+            (5e-5, 2e-4, 512, 42)
+        ],
+        'Hopper-v4': [
+            # TODO: Replace with your selected configurations for Hopper
+            (3e-5, 1e-4, 512, 42),  # Example - replace with your chosen params
+            (5e-5, 1e-4, 256, 42),  # Example - replace with your chosen params
+            (5e-5, 1e-4, 512, 42)   # Example - replace with your chosen params
+        ]
+    }
 
-    parser = argparse.ArgumentParser(description='Plot PPO curves for selected configurations')
-    parser.add_argument('--ema_alpha', type=float, default=0.5, help='EMA smoothing alpha')
-    parser.add_argument('--reload_cache', action='store_true', help='Reload data from TensorBoard instead of using cache')
+    return env_configs.get(env_name, env_configs['HalfCheetah-v4'])
 
-    args = parser.parse_args()
+def get_env_config(env_name):
+    """Get configuration for a specific environment."""
+    configs = {
+        'HalfCheetah-v4': {
+            'results_dir': 'results/MuJoCo/HalfCheetah-v4/PPO_Standard'
+        },
+        'Hopper-v4': {
+            'results_dir': 'results/MuJoCo/Hopper-v4/PPO_Standard'
+        }
+    }
+    return configs.get(env_name, configs['HalfCheetah-v4'])
 
-    results_dir = 'results/MuJoCo/HalfCheetah-v4/PPO_Standard'
+def plot_environment_curves(env_name, ema_alpha=0.5, reload_cache=False):
+    """Plot curves for a specific environment."""
+    print(f"\n{'='*60}")
+    print(f"Processing environment: {env_name}")
+    print(f"{'='*60}")
 
-    # Selected configurations: (lr_actor, lr_critic, hidden_dim, seed)
-    selected_configs = [
-        (1e-4, 1e-4, 256, 42),
-        (5e-5, 2e-4, 256, 42),
-        (5e-5, 2e-4, 512, 42)
-    ]
+    config = get_env_config(env_name)
+    results_dir = config['results_dir']
+    selected_configs = get_selected_configs_for_env(env_name)
 
     cache_file = os.path.join(results_dir, 'analysis', 'ppo_selected_cache.pkl')
 
-    if args.reload_cache or not os.path.exists(cache_file):
+    if reload_cache or not os.path.exists(cache_file):
         print("Finding experiment directories...")
         exp_dirs = find_experiment_dirs(results_dir, selected_configs)
 
@@ -216,12 +239,35 @@ def main():
     print(f"Available tags: {all_tags}")
 
     # Plot each tag
-    print(f"Plotting with EMA alpha={args.ema_alpha}...")
+    save_dir = os.path.join(results_dir, 'analysis')
+    print(f"Plotting with EMA alpha={ema_alpha}...")
     for tag in all_tags:
         print(f"Plotting {tag}...")
-        plot_curve(cached_data, tag, ema_alpha=args.ema_alpha)
+        plot_curve(cached_data, tag, ema_alpha=ema_alpha, save_dir=save_dir, env_name=env_name)
 
-    print("All plots generated!")
+    print(f"All plots for {env_name} generated!")
+
+def main():
+    parser = argparse.ArgumentParser(description='Plot PPO curves for selected configurations across environments')
+    parser.add_argument('--env', '--environments', type=str, default='HalfCheetah-v4',
+                        help='Environment name(s), comma-separated (e.g., "HalfCheetah-v4,Hopper-v4")')
+    parser.add_argument('--ema_alpha', type=float, default=1.0, help='EMA smoothing alpha')
+    parser.add_argument('--reload_cache', action='store_true', help='Reload data from TensorBoard instead of using cache')
+
+    args = parser.parse_args()
+
+    # Parse environment list
+    environments = [env.strip() for env in args.env.split(',')]
+
+    print(f"Plotting PPO curves for environments: {', '.join(environments)}")
+    print(f"EMA alpha: {args.ema_alpha}")
+
+    # Plot for each environment
+    for env_name in environments:
+        plot_environment_curves(env_name, args.ema_alpha, args.reload_cache)
+
+    print("\n" + "="*80)
+    print("All environments processed!")
 
 if __name__ == "__main__":
     main()
