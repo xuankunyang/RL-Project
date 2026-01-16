@@ -4,13 +4,13 @@
 # 1. 资源控制
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
-MAX_JOBS=8                 # DQN 并发数 (考虑到你还有 PPO 在跑，设为 4 很稳)
+MAX_JOBS=8                 # DQN 并发数
 DEVICES=("cuda:0" "cuda:1") # 双卡轮询
 
 # 2. 环境设置
 ENV_NAME="ALE/Pong-v5"
-TOTAL_STEPS=2000000         # Atari 通常需要 5M - 10M 步才能收敛
-NUM_ENVS=16                  # DQN 建议设为 8 (比 16 省显存，且样本相关性更低)
+TOTAL_STEPS=2000000         
+NUM_ENVS=16                 
 
 # 3. 参数网格 (Grid Search)
 # 我们采用 "Baseline + 变体" 的策略，而不是全排列，节省时间
@@ -60,7 +60,7 @@ for param in "${PARAMS[@]}"; do
         # 注意：这里我们针对 DQN 传入特定参数
         python run.py \
             --algo dqn \
-            --dqn_type rainbow \
+            --dqn_type dueling \
             --env_name $ENV_NAME \
             --total_timesteps $TOTAL_STEPS \
             --num_envs $NUM_ENVS \

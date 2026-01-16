@@ -8,22 +8,18 @@ MAX_JOBS=8            # 最大并发数
 DEVICES=("cuda:0" "cuda:1" "cuda:2" "cuda:3") # 可用显卡
 
 # 2. 基础参数
-ENV_NAME="HalfCheetah-v4"
+ENV_NAME="Hopper-v4"
 TOTAL_STEPS=2000000   # 2M 步足够看出好坏
-NUM_ENVS=16           # 16 并行环境 (速度快)
-CLIP=0.2              # 锁定 Clip 为 0.2 (Baseline不建议乱动这个)
+NUM_ENVS=16            # 16 并行环境 (速度快)
+CLIP=0.1              # 锁定 Clip 为 0.2 (Baseline不建议乱动这个)
 
 # 3. 搜索空间 (Grid Search)
 # 格式: "Actor_LR Critic_LR"
 LR_PAIRS=(
-    "1e-4 1e-4"
-    "1e-4 2e-4"
-    "1e-4 5e-4"
-    "5e-5 5e-5"
-    "5e-5 1e-4"
+    "3e-5 1e-4"
     "5e-5 2e-4"
-    "2e-5 5e-5"
-    "1e-5 2e-5"
+    "1e-4 3e-4"
+    "5e-5 1e-4"
 )
 
 HIDDEN_DIMS=(256 512)

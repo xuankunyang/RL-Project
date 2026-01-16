@@ -109,14 +109,34 @@ def make_mujoco_env(env_name, num_envs=1, seed=42):
             # 2. Clip Action
             env = ClipAction(env)
 
-            # 3. Normalize Observation
-            env = NormalizeObservation(env)
-            env = TransformObservation(
-                env,
-                lambda obs: np.clip(obs, -10, 10),
-                env.observation_space
-            )
-            
+            if env_name.startswith("HalfCheetah"):
+                # HalfCheetah: 强烈推荐 obs normalize + clip
+                env = NormalizeObservation(env)
+                env = TransformObservation(
+                    env,
+                    lambda obs: np.clip(obs, -10.0, 10.0),
+                    env.observation_space,
+                )
+                
+            elif env_name.startswith("Ant"):
+                # Stable but high-dimensional, no obs clipping
+                env = NormalizeObservation(env)
+
+            elif env_name.startswith("Hopper"):
+                # Unstable system: normalize only, be conservative
+                env = NormalizeObservation(env)
+
+            else:
+                raise ValueError(f"Unsupported env: {env_name}")
+
+            # # 3. Normalize Observation
+            # env = NormalizeObservation(env)
+            # env = TransformObservation(
+            #     env,
+            #     lambda obs: np.clip(obs, -10, 10),
+            #     env.observation_space
+            # )
+
             return env
         return _thunk
 

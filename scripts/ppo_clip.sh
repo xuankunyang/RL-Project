@@ -21,7 +21,7 @@ BEST_LR_C="2e-4"
 # 0.1: Tighter constraint
 # 0.5: Looser constraint
 # 10.0: Effectively "No Clipping" (Unconstrained / Vanilla PG behavior)
-CLIPS=(0.1 0.5 10.0)
+CLIPS=(0.2 0.5 10.0)
 
 SEEDS=(42 101) # 依然跑两个种子保证结论可靠
 

@@ -41,8 +41,28 @@ def evaluate(agent, env_name, algo, seed, episodes=5):
         
         # 3. 观测归一化 (核心！！！必须加)
         # Agent 的大脑是基于归一化数据训练的，这里必须保持一致
-        eval_env = NormalizeObservation(eval_env)
-        eval_env = TransformObservation(eval_env, lambda obs: np.clip(obs, -10, 10), eval_env.observation_space)
+        # eval_env = NormalizeObservation(eval_env)
+        # eval_env = TransformObservation(eval_env, lambda obs: np.clip(obs, -10, 10), eval_env.observation_space)
+
+        if env_name.startswith("HalfCheetah"):
+            # HalfCheetah: 强烈推荐 obs normalize + clip
+            eval_env = NormalizeObservation(eval_env)
+            eval_env = TransformObservation(
+                eval_env,
+                lambda obs: np.clip(obs, -10.0, 10.0),
+                env.observation_space,
+            )
+
+        elif env_name.startswith("Ant"):
+            # Stable but high-dimensional, no obs clipping
+            eval_env = NormalizeObservation(eval_env)
+
+        elif env_name.startswith("Hopper"):
+            # Unstable system: normalize only, be conservative
+            eval_env = NormalizeObservation(eval_env)
+
+        else:
+            raise ValueError(f"Unsupported env: {env_name}")
         
         # 4. 注意：这里千万【不要】加 NormalizeReward！！！
         # 我们评估是要看真实分数的。
