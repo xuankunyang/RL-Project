@@ -3,6 +3,7 @@ import os
 import torch
 import numpy as np
 import random
+import copy
 from datetime import datetime
 import gymnasium as gym
 from torch.utils.tensorboard import SummaryWriter
@@ -25,7 +26,7 @@ from gymnasium.wrappers import NormalizeObservation, ClipAction, TransformObserv
 import gymnasium as gym
 import numpy as np
 
-def evaluate(agent, env_name, algo, seed, episodes=5):
+def evaluate(agent, env_name, algo, seed, episodes=5, obs_rms=None):
     """
     Evaluation loop
     """
@@ -67,6 +68,21 @@ def evaluate(agent, env_name, algo, seed, episodes=5):
         # 4. 注意：这里千万【不要】加 NormalizeReward！！！
         # 我们评估是要看真实分数的。
         # === 修正部分结束 ===
+        
+        # Inject obs_rms if provided (Critical for PPO + NormalizeObservation)
+        if obs_rms is not None:
+            # Find NormalizeObservation wrapper
+            current = eval_env
+            while True:
+                if isinstance(current, NormalizeObservation):
+                    current.obs_rms = obs_rms
+                    # Optional: Freeze stats during eval if possible, 
+                    # but just setting it to training stats is 99% of the fix.
+                    # current.training = False # Gymnasium NormalizeObservation doesn't have this flag by default
+                    break
+                if not hasattr(current, "env"):
+                    break
+                current = current.env
     
     # 稍微改变一点种子，避免评估到完全一样的轨迹（可选）
     # set_seed(seed + 100, eval_env)
@@ -356,7 +372,22 @@ def main():
             # roughly triggers close to boundary
             # Evaluate using fresh single env to ensure consistent metrics?
             # Existing evaluate function creates its own env.
-            mean_ret, std_ret = evaluate(agent, args.env_name, args.algo, args.seed)
+            
+            # === Fix: Extract obs_rms for PPO ===
+            obs_rms = None
+            if args.algo == 'ppo':
+                try:
+                    # Try to get obs_rms from the first training environment
+                    # env is AsyncVectorEnv or SyncVectorEnv
+                    obs_rms_list = env.get_attr("obs_rms")
+                    if obs_rms_list and len(obs_rms_list) > 0:
+                        # Deepcopy to avoid modification during eval
+                        obs_rms = copy.deepcopy(obs_rms_list[0])
+                except Exception as e:
+                    # Some envs might not have NormalizeObservation, which is fine
+                    pass
+
+            mean_ret, std_ret = evaluate(agent, args.env_name, args.algo, args.seed, obs_rms=obs_rms)
             writer.add_scalar("Eval/MeanReward", mean_ret, global_step)
             logger.info(f"Step {global_step} | Eval Reward: {mean_ret:.2f} +/- {std_ret:.2f}")
             
