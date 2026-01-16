@@ -6,7 +6,7 @@ import argparse
 from data_processor import LogLoader
 
 # --- Style Configuration ---
-sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
+sns.set_theme(style="whitegrid", context="paper", font_scale=1.4)
 PALETTE = {
     'DQN_Vanilla': '#1f77b4', # Blue
     'DQN_Double': '#d62728',  # Red
@@ -61,11 +61,13 @@ def plot_learning_curve(df, env_name, metric='eval_reward', output_dir='plots'):
 def plot_sensitivity(df, env_name, param='lr', metric='train_reward', output_dir='plots'):
     """
     Plots sensitivity analysis (Box Plot) for a specific parameter.
-    Focuses on the final performance (last 20% of steps).
     """
     subset = df[(df['env'] == env_name) & (df['metric'] == metric)]
     
     # Filter for last 20% steps
+    if subset.empty:
+        return
+        
     max_step = subset['step'].max()
     threshold = max_step * 0.8
     final_subset = subset[subset['step'] >= threshold]
@@ -74,14 +76,8 @@ def plot_sensitivity(df, env_name, param='lr', metric='train_reward', output_dir
         print(f"No final data found for {env_name} sensitivity analysis")
         return
 
-    # Group by Run (Seed + Params) to get one score per run
-    # Then boxplot these scores
-    # We assume 'variant' implicitly includes some params, but we want to see the effect of 'param' across all or specific variants.
-    # Let's aggregate by variant + param first.
-    
     plt.figure(figsize=(10, 6))
     
-    # Convert param to string for categorical plotting if needed
     if param not in final_subset.columns:
         print(f"Parameter {param} not found in data columns")
         return
@@ -112,11 +108,14 @@ if __name__ == "__main__":
     loader = LogLoader(args.data_dir, cache_file="all_data_cache.pkl")
     df = loader.get_dataframe()
     
-    # 2. Plot Learning Curves
-    plot_learning_curve(df, args.env, metric='train_reward', output_dir=args.out_dir)
-    plot_learning_curve(df, args.env, metric='eval_reward', output_dir=args.out_dir)
-    
-    # 3. Plot Sensitivity (Examples)
-    plot_sensitivity(df, args.env, param='lr', output_dir=args.out_dir)
-    plot_sensitivity(df, args.env, param='update_freq', output_dir=args.out_dir)
-    plot_sensitivity(df, args.env, param='hidden_dim', output_dir=args.out_dir)
+    if df.empty:
+        print("No data loaded. Please check data_dir.")
+    else:
+        # 2. Plot Learning Curves
+        plot_learning_curve(df, args.env, metric='train_reward', output_dir=args.out_dir)
+        plot_learning_curve(df, args.env, metric='eval_reward', output_dir=args.out_dir)
+        
+        # 3. Plot Sensitivity (Examples)
+        plot_sensitivity(df, args.env, param='lr', output_dir=args.out_dir)
+        plot_sensitivity(df, args.env, param='update_freq', output_dir=args.out_dir)
+        plot_sensitivity(df, args.env, param='hidden_dim', output_dir=args.out_dir)

@@ -5,20 +5,18 @@ import os
 import argparse
 from data_processor import LogLoader
 
-sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
+sns.set_theme(style="whitegrid", context="paper", font_scale=1.4)
 
 def plot_ppo_curve(df, env_name, metric='train_reward', output_dir='plots'):
     subset = df[(df['env'] == env_name) & (df['metric'] == metric)]
     
     if subset.empty:
+        print(f"No data for {env_name}")
         return
 
     plt.figure(figsize=(10, 6))
     
-    # For PPO, we might compare different clip ratios or LRs
-    # Let's try to create a 'Configuration' column for hue
-    # Example: "Clip=0.2"
-    
+    # Create Config Label
     subset = subset.copy()
     if 'clip' in subset.columns:
         subset['Config'] = subset['clip'].apply(lambda x: f"Clip={x}")
@@ -49,5 +47,6 @@ if __name__ == "__main__":
     loader = LogLoader(args.data_dir, cache_file="all_data_cache.pkl")
     df = loader.get_dataframe()
     
-    plot_ppo_curve(df, args.env, metric='train_reward', output_dir=args.out_dir)
-    plot_ppo_curve(df, args.env, metric='eval_reward', output_dir=args.out_dir)
+    if not df.empty:
+        plot_ppo_curve(df, args.env, metric='train_reward', output_dir=args.out_dir)
+        plot_ppo_curve(df, args.env, metric='eval_reward', output_dir=args.out_dir)

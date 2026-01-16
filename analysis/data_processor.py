@@ -71,8 +71,13 @@ class LogLoader:
             return self.data
 
         print(f"Scanning {self.base_dir} for tfevents...")
-        event_files = glob.glob(os.path.join(self.base_dir, "**", "events.out.tfevents*"), recursive=True)
+        # Use recursive glob to find all tfevents
+        event_files = glob.glob(os.path.join(self.base_dir, "**", "*tfevents*"), recursive=True)
         
+        if not event_files:
+            print("No tfevents files found! Check your directory structure.")
+            return []
+
         processed_data = []
 
         for ef in event_files:
@@ -84,11 +89,11 @@ class LogLoader:
                 env_name = os.path.basename(os.path.dirname(parent_dir)) # e.g., Breakout-v5
                 domain = os.path.basename(os.path.dirname(os.path.dirname(parent_dir))) # e.g., Atari
 
-                # Determine Algo Type
-                if "DQN" in variant:
+                # Determine Algo Type based on path or folder name
+                if "DQN" in variant or "dqn" in folder_name.lower():
                     params = self.parse_dqn_folder(folder_name)
                     algo_type = "DQN"
-                elif "PPO" in variant:
+                elif "PPO" in variant or "ppo" in folder_name.lower():
                     params = self.parse_ppo_folder(folder_name)
                     algo_type = "PPO"
                 else:
@@ -162,7 +167,12 @@ class LogLoader:
 
 if __name__ == "__main__":
     # Test run
-    loader = LogLoader("results") # Assuming you run this from project root
+    # Assume results are extracted to 'results' folder in current dir
+    loader = LogLoader("results") 
     df = loader.get_dataframe()
-    print(df.head())
-    print(df.info())
+    if not df.empty:
+        print(df.head())
+        print(df.info())
+        print("Unique Envs:", df['env'].unique())
+    else:
+        print("DataFrame is empty.")
