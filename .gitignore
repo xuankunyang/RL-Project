@@ -7,8 +7,7 @@ __pycache__/
 logs/
 checkpoints/
 videos/
-results/
-results
+*.pth
 
 # System
 .DS_Store
