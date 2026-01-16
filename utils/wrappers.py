@@ -121,6 +121,10 @@ def make_mujoco_env(env_name, num_envs=1, seed=42):
             elif env_name.startswith("Ant"):
                 # Stable but high-dimensional, no obs clipping
                 env = NormalizeObservation(env)
+                # 【关键修正】Ant 的 Reward 很大 (1000~6000)，必须加 Reward Normalization
+                # 否则 Critic 的 Loss 会极其巨大，导致梯度爆炸，Actor 根本学不到东西
+                env = NormalizeReward(env)
+                env = TransformReward(env, lambda r: np.clip(r, -10, 10))
 
             elif env_name.startswith("Hopper"):
                 # Unstable system: normalize only, be conservative
