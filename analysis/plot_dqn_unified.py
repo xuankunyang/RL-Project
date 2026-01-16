@@ -5,7 +5,7 @@ import os
 import argparse
 from data_processor import LogLoader
 
-# --- Style Configuration ---
+# 设置绘图风格
 sns.set_theme(style="whitegrid", context="paper", font_scale=1.4)
 PALETTE = {
     'DQN_Vanilla': '#1f77b4', # Blue
@@ -13,109 +13,102 @@ PALETTE = {
     'DQN_Dueling': '#2ca02c', # Green
     'DQN_Rainbow': '#9467bd'  # Purple
 }
-VARIANT_NAMES = {
-    'DQN_Vanilla': 'Vanilla DQN',
-    'DQN_Double': 'Double DQN',
-    'DQN_Dueling': 'Dueling DQN',
-    'DQN_Rainbow': 'Rainbow DQN'
-}
 
-def plot_learning_curve(df, env_name, metric='eval_reward', output_dir='plots'):
-    """
-    Plots the learning curve for all variants in the given environment.
-    """
-    # Filter data
-    subset = df[(df['env'] == env_name) & (df['metric'] == metric)]
+def plot_learning_curve(df, env_filter, output_dir):
+    """绘制学习曲线"""
+    # 过滤环境 (支持部分匹配，如 'Pong')
+    # 过滤 metric_type 为 reward
+    subset = df[
+        (df['env'].str.contains(env_filter, case=False, na=False)) & 
+        (df['metric_type'] == 'reward')
+    ]
+    
+    # 进一步清洗：通常我们关注 eval 结果或者 train episode reward
+    # 如果有 Eval/MeanReward 优先使用，否则使用 Train/EpisodeReward
+    if 'meanreward' in subset['metric'].unique():
+        subset = subset[subset['metric'] == 'meanreward']
+    elif 'episodereward' in subset['metric'].unique():
+        subset = subset[subset['metric'] == 'episodereward']
     
     if subset.empty:
-        print(f"No data found for {env_name} - {metric}")
+        print(f"No reward data found for filter '{env_filter}'")
         return
 
     plt.figure(figsize=(10, 6))
     
-    # Map friendly names
-    subset = subset.copy()
-    subset['Variant'] = subset['variant'].map(VARIANT_NAMES).fillna(subset['variant'])
-    
-    # Plot
+    # 绘制曲线
+    # ci='sd' 表示绘制标准差阴影，estimator='mean' 表示绘制均值线
     sns.lineplot(
         data=subset, 
         x='step', 
         y='value', 
         hue='variant', 
         palette=PALETTE, 
-        linewidth=2
+        linewidth=2,
+        errorbar='sd' 
     )
     
+    # 格式化
+    env_name = subset['env'].iloc[0] if not subset['env'].empty else env_filter
     plt.title(f"{env_name}: Learning Performance")
     plt.xlabel("Timesteps")
-    plt.ylabel("Average Reward" if 'reward' in metric else metric)
+    plt.ylabel("Average Reward")
     plt.legend(title="Algorithm")
     plt.tight_layout()
     
-    filename = f"{env_name}_{metric}_comparison.png"
-    plt.savefig(os.path.join(output_dir, filename), dpi=300)
+    # 保存
+    filename = f"{env_filter}_learning_curve.png"
+    save_path = os.path.join(output_dir, filename)
+    plt.savefig(save_path, dpi=300)
     plt.close()
-    print(f"Saved {filename}")
+    print(f"Saved plot to {save_path}")
 
-def plot_sensitivity(df, env_name, param='lr', metric='train_reward', output_dir='plots'):
-    """
-    Plots sensitivity analysis (Box Plot) for a specific parameter.
-    """
-    subset = df[(df['env'] == env_name) & (df['metric'] == metric)]
+def plot_ablation_study(df, env_filter, output_dir):
+    """(可选) 绘制消融实验对比图，例如不同 hidden_dim"""
+    # 这是一个示例，展示如何针对特定超参数绘图
+    subset = df[
+        (df['env'].str.contains(env_filter, case=False, na=False)) & 
+        (df['metric_type'] == 'reward') &
+        (df['algo'] == 'DQN')
+    ]
     
-    # Filter for last 20% steps
-    if subset.empty:
+    if subset.empty or 'hidden_dim' not in subset.columns:
         return
-        
-    max_step = subset['step'].max()
-    threshold = max_step * 0.8
-    final_subset = subset[subset['step'] >= threshold]
-    
-    if final_subset.empty:
-        print(f"No final data found for {env_name} sensitivity analysis")
+
+    # 检查 hidden_dim 是否有多个值
+    if len(subset['hidden_dim'].unique()) <= 1:
         return
 
     plt.figure(figsize=(10, 6))
-    
-    if param not in final_subset.columns:
-        print(f"Parameter {param} not found in data columns")
-        return
-
-    sns.boxplot(data=final_subset, x=param, y='value', hue='variant', palette=PALETTE)
-    
-    plt.title(f"{env_name}: Sensitivity to {param.upper()}")
-    plt.ylabel("Final Average Reward")
-    plt.xlabel(param.upper())
-    plt.legend(title="Algorithm", bbox_to_anchor=(1.05, 1), loc='upper left')
+    sns.lineplot(
+        data=subset,
+        x='step',
+        y='value',
+        hue='hidden_dim',
+        style='variant',
+        palette='viridis'
+    )
+    plt.title(f"{env_filter}: Hidden Dimension Sensitivity")
     plt.tight_layout()
-    
-    filename = f"{env_name}_sensitivity_{param}.png"
-    plt.savefig(os.path.join(output_dir, filename), dpi=300)
+    plt.savefig(os.path.join(output_dir, f"{env_filter}_hidden_dim.png"), dpi=300)
     plt.close()
-    print(f"Saved {filename}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", type=str, default="results", help="Root results directory")
-    parser.add_argument("--out_dir", type=str, default="report/Figs_Unified", help="Output directory for plots")
-    parser.add_argument("--env", type=str, default="ALE/Pong-v5", help="Environment to analyze")
+    parser.add_argument("--data_dir", type=str, default="results")
+    parser.add_argument("--out_dir", type=str, default="report/Figs_Unified")
+    parser.add_argument("--env", type=str, default="Pong", help="Environment name filter (e.g., Pong, Breakout)")
+    parser.add_argument("--force_reload", action="store_true", help="Force reload from raw tfevents")
     args = parser.parse_args()
     
     os.makedirs(args.out_dir, exist_ok=True)
     
-    # 1. Load Data
-    loader = LogLoader(args.data_dir, cache_file="all_data_cache.pkl")
-    df = loader.get_dataframe()
+    loader = LogLoader(args.data_dir, cache_file="dqn_data_cache.pkl")
+    df = loader.scan_and_load(force_reload=args.force_reload)
     
-    if df.empty:
-        print("No data loaded. Please check data_dir.")
+    if not df.empty:
+        print(f"Generating plots for {args.env}...")
+        plot_learning_curve(df, args.env, args.out_dir)
+        # plot_ablation_study(df, args.env, args.out_dir)
     else:
-        # 2. Plot Learning Curves
-        plot_learning_curve(df, args.env, metric='train_reward', output_dir=args.out_dir)
-        plot_learning_curve(df, args.env, metric='eval_reward', output_dir=args.out_dir)
-        
-        # 3. Plot Sensitivity (Examples)
-        plot_sensitivity(df, args.env, param='lr', output_dir=args.out_dir)
-        plot_sensitivity(df, args.env, param='update_freq', output_dir=args.out_dir)
-        plot_sensitivity(df, args.env, param='hidden_dim', output_dir=args.out_dir)
+        print("No data loaded.")

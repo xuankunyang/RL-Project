@@ -2,7 +2,6 @@ import os
 import glob
 import re
 import pandas as pd
-import numpy as np
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 import pickle
 
@@ -10,13 +9,12 @@ class LogLoader:
     def __init__(self, base_dir, cache_file="data_cache.pkl"):
         self.base_dir = base_dir
         self.cache_file = cache_file
-        self.data = [] # List of dicts
+        self.data = []
 
     def parse_dqn_folder(self, folder_name):
-        """
-        Parses DQN folder: lr{}_uf{}_sd{}_hd{}_bs{}_env{}_{timestamp}
-        """
+        """解析 DQN 文件夹名中的超参数"""
         params = {}
+        # 匹配模式: lr0.0001_uf10_sd42...
         patterns = {
             'lr': r'lr([\d\.e-]+)',
             'update_freq': r'uf(\d+)',
@@ -28,17 +26,15 @@ class LogLoader:
         for key, pattern in patterns.items():
             match = re.search(pattern, folder_name)
             if match:
-                val = match.group(1)
                 try:
+                    val = match.group(1)
                     params[key] = float(val) if ('.' in val or 'e' in val) else int(val)
                 except:
-                    params[key] = val
+                    pass
         return params
 
     def parse_ppo_folder(self, folder_name):
-        """
-        Parses PPO folder: lra{}_lrc{}_clp{}_sd{}_hd{}_env{}_{timestamp}
-        """
+        """解析 PPO 文件夹名中的超参数"""
         params = {}
         patterns = {
             'lr_actor': r'lra([\d\.e-]+)',
@@ -51,128 +47,157 @@ class LogLoader:
         for key, pattern in patterns.items():
             match = re.search(pattern, folder_name)
             if match:
-                val = match.group(1)
                 try:
+                    val = match.group(1)
                     params[key] = float(val) if ('.' in val or 'e' in val) else int(val)
                 except:
-                    params[key] = val
+                    pass
         return params
 
     def load_from_cache(self):
         if os.path.exists(self.cache_file):
             print(f"Loading data from cache: {self.cache_file}")
-            with open(self.cache_file, 'rb') as f:
-                self.data = pickle.load(f)
-            return True
+            try:
+                with open(self.cache_file, 'rb') as f:
+                    self.data = pickle.load(f)
+                return True
+            except Exception as e:
+                print(f"Failed to load cache: {e}")
+                return False
         return False
 
     def scan_and_load(self, force_reload=False):
         if not force_reload and self.load_from_cache():
-            return self.data
+            return pd.DataFrame(self.data)
 
         print(f"Scanning {self.base_dir} for tfevents...")
-        # Use recursive glob to find all tfevents
+        # 递归查找所有 tfevents 文件
         event_files = glob.glob(os.path.join(self.base_dir, "**", "*tfevents*"), recursive=True)
         
         if not event_files:
-            print("No tfevents files found! Check your directory structure.")
-            return []
+            print("No tfevents files found! Check your data directory.")
+            return pd.DataFrame()
 
         processed_data = []
+        print(f"Found {len(event_files)} log files. Processing...")
 
         for ef in event_files:
             try:
                 dirname = os.path.dirname(ef)
                 folder_name = os.path.basename(dirname)
-                parent_dir = os.path.dirname(dirname)
-                variant = os.path.basename(parent_dir) # e.g., DQN_Vanilla, PPO_Standard
-                env_name = os.path.basename(os.path.dirname(parent_dir)) # e.g., Breakout-v5
-                domain = os.path.basename(os.path.dirname(os.path.dirname(parent_dir))) # e.g., Atari
+                
+                # 路径结构分析
+                # 预期: results/Atari/ALE/Breakout-v5/DQN_Vanilla/lr.../events...
+                path_parts = os.path.normpath(ef).split(os.sep)
+                
+                # 提取环境名和算法名
+                env_name = "Unknown"
+                algo_type = "Unknown"
+                variant = "Unknown"
 
-                # Determine Algo Type based on path or folder name
-                if "DQN" in variant or "dqn" in folder_name.lower():
+                # 常见环境名关键词
+                known_envs = ["Pong", "Breakout", "Cheetah", "Ant", "Hopper", "Walker"]
+                for part in path_parts:
+                    for ke in known_envs:
+                        if ke in part:
+                            env_name = part # e.g., Pong-v5
+                            break
+                
+                # 算法判断
+                for part in path_parts:
+                    if "DQN" in part:
+                        algo_type = "DQN"
+                        variant = part # e.g., DQN_Rainbow
+                    elif "PPO" in part:
+                        algo_type = "PPO"
+                        variant = part
+
+                # 解析参数
+                if algo_type == "DQN":
                     params = self.parse_dqn_folder(folder_name)
-                    algo_type = "DQN"
-                elif "PPO" in variant or "ppo" in folder_name.lower():
+                elif algo_type == "PPO":
                     params = self.parse_ppo_folder(folder_name)
-                    algo_type = "PPO"
                 else:
                     params = {}
-                    algo_type = "Unknown"
 
-                # Meta info
                 meta = {
                     'path': dirname,
                     'variant': variant,
                     'env': env_name,
-                    'domain': domain,
                     'algo': algo_type
                 }
                 meta.update(params)
 
-                # Read TensorBoard
+                # 读取 TensorBoard 数据
                 ea = EventAccumulator(ef)
                 ea.Reload()
+                
+                # 检查 tags
+                if 'scalars' not in ea.Tags():
+                    continue
+                    
                 tags = ea.Tags()['scalars']
 
-                # Extract desired metrics (downsampled if needed)
-                # 1. Train Reward
-                if 'Train/EpisodeReward' in tags:
-                    for e in ea.Scalars('Train/EpisodeReward'):
-                        row = meta.copy()
-                        row['step'] = e.step
-                        row['value'] = e.value
-                        row['metric'] = 'train_reward'
-                        processed_data.append(row)
-                
-                # 2. Eval Reward
-                if 'Eval/MeanReward' in tags:
-                    for e in ea.Scalars('Eval/MeanReward'):
-                        row = meta.copy()
-                        row['step'] = e.step
-                        row['value'] = e.value
-                        row['metric'] = 'eval_reward'
-                        processed_data.append(row)
+                # 提取 Reward 相关指标
+                # 常见 tag: 'Train/EpisodeReward', 'Eval/MeanReward', 'rollout/ep_rew_mean'
+                for tag in tags:
+                    is_reward = False
+                    metric_name = tag.split('/')[-1].lower()
+                    
+                    if 'reward' in metric_name or 'rew' in metric_name:
+                        is_reward = True
+                    
+                    # 如果不是 reward，可以根据需要添加 loss 等其他指标的过滤
+                    if not is_reward and 'loss' not in metric_name:
+                        continue
 
-                # 3. Loss (Sampled)
-                loss_tags = ['Loss/DQN', 'Loss/Policy', 'Loss/Value', 'Loss/Entropy']
-                for lt in loss_tags:
-                    if lt in tags:
-                        events = ea.Scalars(lt)
-                        # Downsample: take every 10th point to save memory
-                        for i, e in enumerate(events):
-                            if i % 10 == 0:
-                                row = meta.copy()
-                                row['step'] = e.step
-                                row['value'] = e.value
-                                row['metric'] = lt.replace('/', '_').lower() # loss_dqn
-                                processed_data.append(row)
-            
+                    events = ea.Scalars(tag)
+                    if not events:
+                        continue
+                        
+                    # 降采样：每隔几个点取一个，防止数据量爆炸
+                    # 保证至少取 1000 个点，如果总数小于 1000 则全取
+                    step_interval = max(1, len(events) // 1000) 
+                    
+                    for i, e in enumerate(events):
+                        if i % step_interval == 0:
+                            row = meta.copy()
+                            row['step'] = e.step
+                            row['value'] = e.value
+                            row['metric'] = metric_name
+                            row['full_tag'] = tag
+                            if is_reward:
+                                row['metric_type'] = 'reward'
+                            elif 'loss' in metric_name:
+                                row['metric_type'] = 'loss'
+                            else:
+                                row['metric_type'] = 'other'
+                                
+                            processed_data.append(row)
+
             except Exception as e:
                 print(f"Error processing {ef}: {e}")
 
         self.data = processed_data
         
-        # Save cache
         print(f"Saving {len(self.data)} records to cache...")
-        with open(self.cache_file, 'wb') as f:
-            pickle.dump(self.data, f)
+        try:
+            with open(self.cache_file, 'wb') as f:
+                pickle.dump(self.data, f)
+        except Exception as e:
+            print(f"Warning: Could not save cache: {e}")
         
-        return self.data
-
-    def get_dataframe(self):
-        if not self.data:
-            self.scan_and_load()
         return pd.DataFrame(self.data)
 
 if __name__ == "__main__":
-    # Test run
-    # Assume results are extracted to 'results' folder in current dir
-    loader = LogLoader("results") 
-    df = loader.get_dataframe()
-    if not df.empty:
-        print(df.head())
-        print(df.info())
-        print("Unique Envs:", df['env'].unique())
+    # 测试代码
+    loader = LogLoader("results")
+    # 如果没有 results 文件夹，这个测试会打印找不到文件
+    if os.path.exists("results"):
+        df = loader.scan_and_load()
+        if not df.empty:
+            print(df.head())
+            print("Unique Envs:", df['env'].unique())
+            print("Unique Algos:", df['algo'].unique())
     else:
-        print("DataFrame is empty.")
+        print("Note: 'results' directory not found locally. Run this after downloading data.")
