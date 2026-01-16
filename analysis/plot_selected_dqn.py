@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 import pickle
+import argparse
 
 # Set style
 plt.style.use('seaborn-v0_8')
@@ -117,7 +118,7 @@ def find_experiment_dirs(base_results_dir, selected_configs):
 
     return exp_dirs
 
-def plot_curve(data_dict, tag, ema_alpha=0.1, save_dir='results/Atari/ALE/Breakout-v5/analysis'):
+def plot_curve(data_dict, tag, ema_alpha=0.1, save_dir='results/Atari/ALE/Breakout-v5/analysis', env_name='Breakout-v5'):
     """Plot a single curve for all DQN variants."""
     os.makedirs(save_dir, exist_ok=True)
 
@@ -173,40 +174,53 @@ def plot_curve(data_dict, tag, ema_alpha=0.1, save_dir='results/Atari/ALE/Breako
 
     ax.set_xlabel('Training Steps')
     ax.set_ylabel(tag.replace('/', ' ').replace('Train', '').replace('Eval', 'Evaluation').strip())
-    # title_suffix = f'(EMA α={ema_alpha})'
-    # ax.set_title(f'{tag.replace("/", " - ")} Comparison')
+    # ax.set_title(f'{env_name} - {tag.replace("/", " - ")} Comparison (EMA α={ema_alpha})')
     ax.legend()
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    save_path = os.path.join(save_dir, f'{tag.replace("/", "_")}_dqn_comparison.png')
+    save_path = os.path.join(save_dir, f'{tag.replace("/", "_")}_dqn_{env_name.replace("-", "_")}_comparison.png')
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved plot: {save_path}")
 
-def main():
-    import argparse
-
-    parser = argparse.ArgumentParser(description='Plot DQN curves for selected configurations')
-    parser.add_argument('--ema_alpha', type=float, default=1.0, help='EMA smoothing alpha')
-    parser.add_argument('--reload_cache', action='store_true', help='Reload data from TensorBoard instead of using cache')
-
-    args = parser.parse_args()
-
-    base_results_dir = 'results/Atari/ALE/Breakout-v5'
-
-    # TODO: Replace with your selected configurations
-    # Format: {variant: {'lr': value, 'update_freq': value, 'hidden_dim': value, 'seed': value}}
-    selected_configs = {
-        'DQN_Vanilla': {'lr': 1e-4, 'update_freq': 1000, 'hidden_dim': 256, 'seed': 42},
-        'DQN_Double': {'lr': 1e-4, 'update_freq': 1000, 'hidden_dim': 512, 'seed': 42},
-        'DQN_Dueling': {'lr': 1e-4, 'update_freq': 5000, 'hidden_dim': 512, 'seed': 42},
-        'DQN_Rainbow': {'lr': 1e-4, 'update_freq': 2000, 'hidden_dim': 512, 'seed': 42}
+def get_selected_configs_for_env(env_name):
+    """Get selected configurations for a specific environment."""
+    # Define configurations for each environment
+    env_configs = {
+        'Breakout-v5': {
+            'DQN_Vanilla': {'lr': 1e-4, 'update_freq': 1000, 'hidden_dim': 256, 'seed': 42},
+            'DQN_Double': {'lr': 1e-4, 'update_freq': 1000, 'hidden_dim': 512, 'seed': 42},
+            'DQN_Dueling': {'lr': 1e-4, 'update_freq': 5000, 'hidden_dim': 512, 'seed': 42},
+            'DQN_Rainbow': {'lr': 1e-4, 'update_freq': 2000, 'hidden_dim': 512, 'seed': 42}
+        },
+        'Pong-v5': {
+            # TODO: Replace with your selected configurations for Pong
+            'DQN_Vanilla': {'lr': 1e-4, 'update_freq': 2000, 'hidden_dim': 512, 'seed': 42},  # Example - replace with your chosen params
+            'DQN_Double': {'lr': 1e-4, 'update_freq': 1000, 'hidden_dim': 256, 'seed': 42},   # Example - replace with your chosen params
+            'DQN_Dueling': {'lr': 5e-5, 'update_freq': 1000, 'hidden_dim': 256, 'seed': 42},  # Example - replace with your chosen params
+            'DQN_Rainbow': {'lr': 1e-4, 'update_freq': 2000, 'hidden_dim': 512, 'seed': 42}   # Example - replace with your chosen params
+        }
     }
+
+    return env_configs.get(env_name, {})
+
+def plot_environment_curves(env_name, ema_alpha=0.5, reload_cache=False):
+    """Plot curves for a specific environment."""
+    print(f"\n{'='*60}")
+    print(f"Processing environment: {env_name}")
+    print(f"{'='*60}")
+
+    base_results_dir = f'results/Atari/ALE/{env_name}'
+    selected_configs = get_selected_configs_for_env(env_name)
+
+    if not selected_configs:
+        print(f"No configurations defined for {env_name}")
+        return
 
     cache_file = os.path.join(base_results_dir, 'analysis', 'dqn_selected_cache.pkl')
 
-    if args.reload_cache or not os.path.exists(cache_file):
+    if reload_cache or not os.path.exists(cache_file):
         print("Finding experiment directories...")
         exp_dirs = find_experiment_dirs(base_results_dir, selected_configs)
 
@@ -247,12 +261,35 @@ def main():
     print(f"Available tags: {all_tags}")
 
     # Plot each tag
-    print(f"Plotting with EMA alpha={args.ema_alpha}...")
+    save_dir = os.path.join(base_results_dir, 'analysis')
+    print(f"Plotting with EMA alpha={ema_alpha}...")
     for tag in all_tags:
         print(f"Plotting {tag}...")
-        plot_curve(cached_data, tag, ema_alpha=args.ema_alpha)
+        plot_curve(cached_data, tag, ema_alpha=ema_alpha, save_dir=save_dir, env_name=env_name)
 
-    print("All plots generated!")
+    print(f"All plots for {env_name} generated!")
+
+def main():
+    parser = argparse.ArgumentParser(description='Plot DQN curves for selected configurations across environments')
+    parser.add_argument('--env', '--environments', type=str, default='Pong-v5',
+                        help='Environment name(s), comma-separated (e.g., "Breakout-v5,Pong-v5")')
+    parser.add_argument('--ema_alpha', type=float, default=1.0, help='EMA smoothing alpha')
+    parser.add_argument('--reload_cache', action='store_true', help='Reload data from TensorBoard instead of using cache')
+
+    args = parser.parse_args()
+
+    # Parse environment list
+    environments = [env.strip() for env in args.env.split(',')]
+
+    print(f"Plotting DQN curves for environments: {', '.join(environments)}")
+    print(f"EMA alpha: {args.ema_alpha}")
+
+    # Plot for each environment
+    for env_name in environments:
+        plot_environment_curves(env_name, args.ema_alpha, args.reload_cache)
+
+    print("\n" + "="*80)
+    print("All environments processed!")
 
 if __name__ == "__main__":
     main()

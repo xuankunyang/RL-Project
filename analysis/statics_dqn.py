@@ -1,6 +1,7 @@
 import os
 import re
 import numpy as np
+import argparse
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 def parse_dqn_exp_dir(exp_dir):
@@ -73,24 +74,27 @@ def process_experiment(exp_path, total_steps=2000000):
         print(f"Error processing {exp_path}: {e}")
         return None, None
 
-def main():
-    results_base_dir = 'results/Atari/ALE/Breakout-v5'
-    total_steps = 2000000
+def analyze_environment(env_name, output_file=None, total_steps=2000000):
+    """Analyze DQN results for a specific environment."""
+    results_base_dir = f'results/Atari/ALE/{env_name}'
 
     # DQN variant directories to check
     dqn_variants = ['DQN_Vanilla', 'DQN_Double', 'DQN_Dueling', 'DQN_Rainbow']
 
-    print("DQN Parameter Analysis Results")
-    print("=" * 50)
+    output_lines = []
+    output_lines.append(f"DQN Parameter Analysis Results for {env_name}")
+    output_lines.append("=" * (40 + len(env_name)))
+    output_lines.append("")
 
     for variant in dqn_variants:
         variant_dir = os.path.join(results_base_dir, variant)
         if not os.path.exists(variant_dir):
-            print(f"\nDQN Variant: {variant} (No experiments found)")
+            output_lines.append(f"DQN Variant: {variant} (No experiments found)")
+            output_lines.append("")
             continue
 
-        print(f"\nDQN Variant: {variant}")
-        print("-" * 30)
+        output_lines.append(f"DQN Variant: {variant}")
+        output_lines.append("-" * 30)
 
         # Group experiments by parameter combinations
         param_groups = {}
@@ -110,30 +114,68 @@ def main():
             param_groups[key].append((params['seed'], exp_path))
 
         if not param_groups:
-            print("No valid experiments found")
+            output_lines.append("No valid experiments found")
+            output_lines.append("")
             continue
 
         # Process each parameter group
         for (lr, update_freq, hidden_dim), exps in param_groups.items():
-            print(f"\nParameter Group: LR={lr:.0e}, Update Freq={update_freq}, Hidden Dim={hidden_dim}")
+            output_lines.append(f"Parameter Group: LR={lr:.0e}, Update Freq={update_freq}, Hidden Dim={hidden_dim}")
 
             # Since only one seed is used, just process the single experiment
             if len(exps) != 1:
-                print(f"  Warning: Expected 1 experiment, found {len(exps)}")
+                output_lines.append(f"  Warning: Expected 1 experiment, found {len(exps)}")
 
             for seed, exp_path in exps:
-                print(f"  Processing seed {seed}...")
+                output_lines.append(f"  Processing seed {seed}...")
                 train_mean, eval_mean = process_experiment(exp_path, total_steps)
 
                 if train_mean is not None:
-                    print(f"    Train last 10% mean: {train_mean:.2f}")
+                    output_lines.append(f"    Train last 10% mean: {train_mean:.2f}")
                 else:
-                    print("    Train data not available")
+                    output_lines.append("    Train data not available")
 
                 if eval_mean is not None:
-                    print(f"    Eval last 10% mean: {eval_mean:.2f}")
+                    output_lines.append(f"    Eval last 10% mean: {eval_mean:.2f}")
                 else:
-                    print("    Eval data not available")
+                    output_lines.append("    Eval data not available")
+
+            output_lines.append("")
+
+        output_lines.append("")
+
+    # Print to console
+    for line in output_lines:
+        print(line)
+
+    # Save to file if specified
+    if output_file:
+        with open(output_file, 'w') as f:
+            f.write('\n'.join(output_lines))
+        print(f"Results saved to {output_file}")
+
+def main():
+    parser = argparse.ArgumentParser(description='Analyze DQN parameter search results across environments')
+    parser.add_argument('--env', '--environments', type=str, default='Breakout-v5',
+                        help='Environment name(s), comma-separated (e.g., "Breakout-v5,Pong-v5")')
+    parser.add_argument('--output_file', type=str, help='Output file to save results')
+    parser.add_argument('--total_steps', type=int, default=2000000,
+                        help='Total training steps (default: 2000000)')
+
+    args = parser.parse_args()
+
+    # Parse environment list
+    environments = [env.strip() for env in args.env.split(',')]
+
+    print(f"Analyzing DQN results for environments: {', '.join(environments)}")
+    print(f"Total training steps: {args.total_steps}")
+    print()
+
+    # Analyze each environment
+    for env_name in environments:
+        analyze_environment(env_name, args.output_file, args.total_steps)
+        if len(environments) > 1:
+            print("\n" + "="*80 + "\n")
 
 if __name__ == "__main__":
     main()
