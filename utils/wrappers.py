@@ -67,7 +67,7 @@ def make_atari_env(env_name, num_envs=1, seed=42, is_training=True):
                     scale_obs=False
                 )
                 env = FireResetWrapper(env)
-            else:
+            elif 'Pong' in env_name:
                 env = AtariPreprocessing(
                     env, 
                     noop_max=30, 
@@ -76,6 +76,9 @@ def make_atari_env(env_name, num_envs=1, seed=42, is_training=True):
                     grayscale_obs=True,
                     scale_obs=False
                 )
+            
+            else:
+                raise ValueError(f"Unsupported env: {env_name}")
             
             # === 【关键点 3】只在训练时 Clip Reward ===
             # 评估时我们需要 agent 跑出真实分数，虽然 agent 内部还是基于 clipped 经验学的

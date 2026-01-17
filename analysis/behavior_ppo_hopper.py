@@ -19,8 +19,8 @@ from gymnasium.wrappers import NormalizeObservation
 # === 配置 (请替换为您的实际路径) ===
 ENV_NAME = "Hopper-v4"
 # TODO: 请替换为您 Hopper 训练结果中效果最好的模型路径
-MODEL_PATH = "results/MuJoCo/Hopper-v4/PPO_Standard/Your_Best_Run_Folder/models/final_model.pth" 
-HIDDEN_DIM = 256
+MODEL_PATH = "results/MuJoCo/Hopper-v4/PPO_Standard/lra5e-05_lrc0.0001_clp0.1_sd42_hd512_env16_20260116-092346/models/final_model.pth" 
+HIDDEN_DIM = 512
 SEED = 42
 
 def plot_hopper_gait():
@@ -88,7 +88,7 @@ def plot_hopper_gait():
     plt.plot(x, actions[:, 1], label='Leg Joint', linewidth=2.5, color='#1f77b4', alpha=0.9)   # 蓝
     plt.plot(x, actions[:, 2], label='Foot Joint', linewidth=2.5, color='#2ca02c', alpha=0.9)  # 绿
     
-    plt.title(f"Hopper Gait Analysis: Joint Torque Trajectories", fontsize=16, pad=15)
+    plt.title("Learned Gait Pattern (Action Trajectory) - Hopper-v4", fontsize=16, pad=15)
     plt.xlabel("Timesteps (Control Cycles)", fontsize=14)
     plt.ylabel("Action Value (Torque)", fontsize=14)
     
@@ -100,7 +100,7 @@ def plot_hopper_gait():
     plt.grid(True, linestyle='--', alpha=0.7)
     
     # 保存图片
-    save_dir = os.path.join(parent_dir, "analysis", "results")
+    save_dir = "results/MuJoCo/Hopper-v4/PPO_Standard/analysis"
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, "hopper_gait.png")
     
