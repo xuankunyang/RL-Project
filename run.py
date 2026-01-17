@@ -65,9 +65,9 @@ def main():
     
     # === Basic Settings ===
     parser.add_argument('--env_name', type=str, required=True, help='Gym environment name (e.g., ALE/Breakout-v5, Hopper-v4)')
-    parser.add_argument('--algo', type=str, required=True, choices=['dqn', 'ppo'], help='Algorithm used for training')
+    parser.add_argument('--algo', type=str, default=None, choices=['dqn', 'ppo'], help='Algorithm used for training (Optional, inferred from env)')
     parser.add_argument('--model_path', type=str, default=None, help='Path to the .pth model file (Optional if in BEST_MODELS)')
-    parser.add_argument('--dqn_type', type=str, default='dqn', choices=['dqn', 'double', 'dueling', 'rainbow'], help='DQN Variant (required for DQN)')
+    parser.add_argument('--dqn_type', type=str, default='rainbow', choices=['dqn', 'double', 'dueling', 'rainbow'], help='DQN Variant (default: rainbow)')
     
     # === Evaluation Settings ===
     parser.add_argument('--episodes', type=int, default=5, help='Number of episodes to evaluate')
@@ -85,6 +85,17 @@ def main():
     parser.add_argument('--hidden_dim_ppo', type=int, default=256)
 
     args = parser.parse_args()
+
+    # === Infer Algorithm if not provided ===
+    if args.algo is None:
+        if any(x in args.env_name for x in ['ALE', 'Breakout', 'Pong', 'SpaceInvaders', 'NoFrameskip']):
+            args.algo = 'dqn'
+            print(f"Inferred algorithm: DQN (for {args.env_name})")
+        elif any(x in args.env_name for x in ['Hopper', 'Ant', 'HalfCheetah', 'Walker', 'Swimmer', 'Humanoid']):
+            args.algo = 'ppo'
+            print(f"Inferred algorithm: PPO (for {args.env_name})")
+        else:
+            parser.error(f"Could not infer algorithm for environment {args.env_name}. Please specify --algo.")
 
     # === Load Configuration from BEST_MODELS ===
     if args.model_path is None:

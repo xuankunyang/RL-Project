@@ -11,6 +11,7 @@ results/
 results
 
 report/
+configs/
 
 # System
 .DS_Store
