@@ -169,6 +169,10 @@ def get_selected_configs_for_env(env_name):
             (3e-5, 1e-4, 512, 42),  # Example - replace with your chosen params
             (5e-5, 1e-4, 256, 42),  # Example - replace with your chosen params
             (5e-5, 1e-4, 512, 42)   # Example - replace with your chosen params
+        ],
+        'Ant-v4': [
+            # Selected configurations for Ant (clip=0.2)
+            (5e-5, 2e-4, 256, 101),   # lra0.0003_lrc0.001_clp0.2_sd42_hd512
         ]
     }
 
@@ -182,6 +186,9 @@ def get_env_config(env_name):
         },
         'Hopper-v4': {
             'results_dir': 'results/MuJoCo/Hopper-v4/PPO_Standard'
+        },
+        'Ant-v4': {
+            'results_dir': 'results/MuJoCo/Ant-v4/PPO_Standard'
         }
     }
     return configs.get(env_name, configs['HalfCheetah-v4'])
