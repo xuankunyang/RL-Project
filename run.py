@@ -124,8 +124,18 @@ def main():
 
     # === Load Configuration from BEST_MODELS ===
     if args.model_path is None:
-        if args.env_name in BEST_MODELS and args.algo in BEST_MODELS[args.env_name]:
-            algo_config = BEST_MODELS[args.env_name][args.algo]
+        # 1. Try exact match
+        config_env_name = args.env_name
+        
+        # 2. Try adding ALE/ prefix for Atari if not found
+        if config_env_name not in BEST_MODELS and args.algo == 'dqn' and not config_env_name.startswith('ALE/'):
+             candidate = f"ALE/{config_env_name}"
+             if candidate in BEST_MODELS:
+                 config_env_name = candidate
+                 print(f"Mapped {args.env_name} to {config_env_name} in BEST_MODELS.")
+
+        if config_env_name in BEST_MODELS and args.algo in BEST_MODELS[config_env_name]:
+            algo_config = BEST_MODELS[config_env_name][args.algo]
             
             # Select specific config based on algorithm variant
             config = None
@@ -206,8 +216,38 @@ def main():
     # === Load Model ===
     print(f"Loading model from {args.model_path}...")
     try:
+        # Check if CUDA is available, if not, map storage to CPU
+        if not torch.cuda.is_available():
+             print("CUDA not available. Mapping model to CPU...")
+             # We need to modify agent.load() to accept map_location or handle it inside the agent
+             # But standard pattern is often to just load state dict here if agent.load is rigid
+             # Let's check agent.load implementation. Assuming it uses torch.load(path)
+             # To be safe, we can try to patch the load behavior or catch the specific error
+             pass 
+        
         agent.load(args.model_path)
         print("Model loaded successfully.")
+    except RuntimeError as e:
+        if 'Attempting to deserialize object on a CUDA device' in str(e):
+            print("Caught CUDA error. Retrying with map_location='cpu'...")
+            
+            checkpoint = torch.load(args.model_path, map_location='cpu')
+            
+            # Assuming standard structure: checkpoint is state_dict or has 'model_state_dict'
+            if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+                 state_dict = checkpoint['model_state_dict']
+            else:
+                 state_dict = checkpoint
+            
+            if args.algo == 'dqn':
+                agent.q_net.load_state_dict(state_dict)
+            else:
+                agent.policy.load_state_dict(state_dict)
+                
+            print("Model loaded successfully (mapped to CPU).")
+        else:
+            print(f"Error loading model: {e}")
+            return
     except Exception as e:
         print(f"Error loading model: {e}")
         return

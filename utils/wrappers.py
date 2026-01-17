@@ -106,7 +106,24 @@ def make_mujoco_env(env_name, num_envs=1, is_training=True, render_mode=None):
     """
     def make_env(rank):
         def _thunk():
-            env = gym.make(env_name, render_mode=render_mode if rank == 0 else None)
+            # 配置渲染参数
+            # camera_id=-1 通常是跟踪相机的 ID，或者使用 camera_name='track'
+            # 但是 Gymnasium v0.29+ 的 render_mode 参数是在 make 时传入的
+            # 而具体的 camera 配置通常在 render() 调用时，或者通过 env.unwrapped.model 配置
+            # Gymnasium 的 MuJoCo 环境允许在 make 时传入 render_kwargs
+            
+            render_kwargs = {}
+            if render_mode == 'human' or render_mode == 'rgb_array':
+                 # 尝试设置相机跟随
+                 # 注意：不同 MuJoCo 环境的相机 ID 可能不同，但 -1 通常是跟随
+                if 'Ant' in env_name or 'Hopper' in env_name or 'HalfCheetah' in env_name:
+                    render_kwargs['camera_id'] = -1
+
+            env = gym.make(
+                env_name, 
+                render_mode=render_mode if rank == 0 else None,
+                **render_kwargs
+            )
             
             # 1. 记录真实分数 (必须在 Normalize 之前)
             env = RecordEpisodeStatistics(env)
