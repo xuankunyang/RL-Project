@@ -33,7 +33,7 @@ class FireResetWrapper(gym.Wrapper):
                 obs, info = self.env.reset(**kwargs)
         return obs, info
 
-def make_atari_env(env_name, num_envs=1, seed=42, is_training=True, render_mode=None):
+def make_atari_env(env_name, num_envs=1, is_training=True, render_mode=None):
     """
     针对 Breakout：
     is_training=True:  开启 LifeLoss (掉命即Done), 开启 RewardClip (训练稳定)
@@ -98,7 +98,7 @@ def make_atari_env(env_name, num_envs=1, seed=42, is_training=True, render_mode=
         return make_env(0)()
 
 
-def make_mujoco_env(env_name, num_envs=1, seed=42, is_training=True, render_mode=None):
+def make_mujoco_env(env_name, num_envs=1, is_training=True, render_mode=None):
     """
     创建一个经过预处理的 MuJoCo 环境 (PPO 专用)
     is_training=True:  开启 Reward Normalize & Clip

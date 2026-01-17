@@ -27,7 +27,7 @@ from gymnasium.wrappers import NormalizeObservation, ClipAction, TransformObserv
 import gymnasium as gym
 import numpy as np
 
-def evaluate(agent, env_name, algo, seed, episodes=5, obs_rms=None):
+def evaluate(agent, env_name, algo, episodes=5, obs_rms=None):
     """
     Evaluation loop
     """
@@ -35,7 +35,7 @@ def evaluate(agent, env_name, algo, seed, episodes=5, obs_rms=None):
         eval_env = make_atari_env(env_name, num_envs=1, is_training=False)
     else:
         # Unified environment creation
-        eval_env = make_mujoco_env(env_name, num_envs=1, seed=seed, is_training=False)
+        eval_env = make_mujoco_env(env_name, num_envs=1, is_training=False)
         
         # Inject obs_rms if provided (Critical for PPO + NormalizeObservation)
         if obs_rms is not None:
@@ -190,7 +190,7 @@ def main():
 
     # 2. 环境选择与 Agent 初始化
     if args.algo == 'dqn':
-        env = make_atari_env(args.env_name, num_envs=args.num_envs, seed=args.seed, is_training=True)
+        env = make_atari_env(args.env_name, num_envs=args.num_envs, is_training=True)
         # VectorEnv seeding handled inside or via seed arg if passed (AsyncVectorEnv doesn't inherently take seed in init list easily without wrapper, 
         # but our make_env(rank) architecture handles it if we passed seed, actually we didn't pass seed to make_env yet in wrappers.py properly?
         # Let's re-verify wrappers.py logic. make_env(rank) doesn't use seed. 
@@ -198,7 +198,7 @@ def main():
         # We will seed on reset.
         agent = DQNAgent(env, args, writer)
     elif args.algo == 'ppo':
-        env = make_mujoco_env(args.env_name, num_envs=args.num_envs, seed=args.seed)
+        env = make_mujoco_env(args.env_name, num_envs=args.num_envs)
         agent = PPOAgent(env, args, writer)
     
     # 3. Training Loop
@@ -352,7 +352,7 @@ def main():
                     # Some envs might not have NormalizeObservation, which is fine
                     pass
 
-            mean_ret, std_ret = evaluate(agent, args.env_name, args.algo, args.seed, obs_rms=obs_rms)
+            mean_ret, std_ret = evaluate(agent, args.env_name, args.algo, obs_rms=obs_rms)
             writer.add_scalar("Eval/MeanReward", mean_ret, global_step)
             logger.info(f"Step {global_step} | Eval Reward: {mean_ret:.2f} +/- {std_ret:.2f}")
             

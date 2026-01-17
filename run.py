@@ -118,9 +118,9 @@ def main():
     print(f"Creating environment: {args.env_name} with render_mode={render_mode}")
     
     if args.algo == 'dqn':
-        env = make_atari_env(args.env_name, num_envs=1, seed=args.seed, is_training=False, render_mode=render_mode)
+        env = make_atari_env(args.env_name, num_envs=1, is_training=False, render_mode=render_mode)
     else:
-        env = make_mujoco_env(args.env_name, num_envs=1, seed=args.seed, is_training=False, render_mode=render_mode)
+        env = make_mujoco_env(args.env_name, num_envs=1, is_training=False, render_mode=render_mode)
 
     if args.save_video:
         video_folder = os.path.join(args.video_dir, f"{args.env_name}_{args.algo}_{time.strftime('%Y%m%d-%H%M%S')}")
