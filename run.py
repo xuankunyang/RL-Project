@@ -31,43 +31,10 @@ def evaluate(agent, env_name, algo, seed, episodes=5, obs_rms=None):
     Evaluation loop
     """
     if algo == 'dqn':
-        eval_env = make_atari_env(env_name, is_training=False)
+        eval_env = make_atari_env(env_name, num_envs=1, is_training=False)
     else:
-        # === 修正部分开始 ===
-        # 1. 基础环境
-        eval_env = gym.make(env_name)
-        
-        # 2. 动作截断 (必须加，防止 Agent 输出超出 [-1, 1] 的非法动作)
-        eval_env = ClipAction(eval_env)
-        
-        # 3. 观测归一化 (核心！！！必须加)
-        # Agent 的大脑是基于归一化数据训练的，这里必须保持一致
-        # eval_env = NormalizeObservation(eval_env)
-        # eval_env = TransformObservation(eval_env, lambda obs: np.clip(obs, -10, 10), eval_env.observation_space)
-
-        if env_name.startswith("HalfCheetah"):
-            # HalfCheetah: 强烈推荐 obs normalize + clip
-            eval_env = NormalizeObservation(eval_env)
-            eval_env = TransformObservation(
-                eval_env,
-                lambda obs: np.clip(obs, -10.0, 10.0),
-                env.observation_space,
-            )
-
-        elif env_name.startswith("Ant"):
-            # Stable but high-dimensional, no obs clipping
-            eval_env = NormalizeObservation(eval_env)
-
-        elif env_name.startswith("Hopper"):
-            # Unstable system: normalize only, be conservative
-            eval_env = NormalizeObservation(eval_env)
-
-        else:
-            raise ValueError(f"Unsupported env: {env_name}")
-        
-        # 4. 注意：这里千万【不要】加 NormalizeReward！！！
-        # 我们评估是要看真实分数的。
-        # === 修正部分结束 ===
+        # Unified environment creation
+        eval_env = make_mujoco_env(env_name, num_envs=1, seed=seed, is_training=False)
         
         # Inject obs_rms if provided (Critical for PPO + NormalizeObservation)
         if obs_rms is not None:
@@ -76,9 +43,6 @@ def evaluate(agent, env_name, algo, seed, episodes=5, obs_rms=None):
             while True:
                 if isinstance(current, NormalizeObservation):
                     current.obs_rms = obs_rms
-                    # Optional: Freeze stats during eval if possible, 
-                    # but just setting it to training stats is 99% of the fix.
-                    # current.training = False # Gymnasium NormalizeObservation doesn't have this flag by default
                     break
                 if not hasattr(current, "env"):
                     break

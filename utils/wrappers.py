@@ -94,10 +94,11 @@ def make_atari_env(env_name, num_envs=1, seed=42, is_training=True):
         return make_env(0)()
 
 
-def make_mujoco_env(env_name, num_envs=1, seed=42):
+def make_mujoco_env(env_name, num_envs=1, seed=42, is_training=True):
     """
     创建一个经过预处理的 MuJoCo 环境 (PPO 专用)
-    这里需要修改一下！！！！！统一一下！！！！！
+    is_training=True:  开启 Reward Normalize & Clip
+    is_training=False: 关闭 Reward Normalize & Clip (看真实分数)
     """
     def make_env(rank):
         def _thunk():
@@ -123,8 +124,10 @@ def make_mujoco_env(env_name, num_envs=1, seed=42):
                 env = NormalizeObservation(env)
                 # 【关键修正】Ant 的 Reward 很大 (1000~6000)，必须加 Reward Normalization
                 # 否则 Critic 的 Loss 会极其巨大，导致梯度爆炸，Actor 根本学不到东西
-                env = NormalizeReward(env)
-                env = TransformReward(env, lambda r: np.clip(r, -10, 10))
+                # 只在训练时开启
+                if is_training:
+                    env = NormalizeReward(env)
+                    env = TransformReward(env, lambda r: np.clip(r, -10, 10))
 
             elif env_name.startswith("Hopper"):
                 # Unstable system: normalize only, be conservative
@@ -132,14 +135,6 @@ def make_mujoco_env(env_name, num_envs=1, seed=42):
 
             else:
                 raise ValueError(f"Unsupported env: {env_name}")
-
-            # # 3. Normalize Observation
-            # env = NormalizeObservation(env)
-            # env = TransformObservation(
-            #     env,
-            #     lambda obs: np.clip(obs, -10, 10),
-            #     env.observation_space
-            # )
 
             return env
         return _thunk
