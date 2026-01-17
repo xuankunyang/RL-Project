@@ -1,12 +1,14 @@
 # Python
 __pycache__/
 *.pyc
+*.pkl
 .venv/
 
 # RL
 logs/
 checkpoints/
 videos/
+videos
 results/
 results
 
@@ -16,4 +18,3 @@ configs/
 # System
 .DS_Store
 *.tar.gz
-*.pkl

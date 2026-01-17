@@ -81,8 +81,33 @@ def main():
 
     # === Dummy Hyperparams (Required to initialize Agents) ===
     # These values don't affect evaluation but are needed for __init__
-    parser.add_argument('--hidden_dim_dqn', type=int, default=512)
-    parser.add_argument('--hidden_dim_ppo', type=int, default=256)
+
+    # DQN
+    parser.add_argument('--update_freq', type=int, default=1000, help='Target network update frequency')
+    parser.add_argument('--train_freq', type=int, default=4, help='Training frequency (train every N steps)')
+    parser.add_argument('--hidden_dim_dqn', type=int, default=512, help='Hidden dimension for DQNs')
+    parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate (Shared default)')
+    parser.add_argument('--epsilon_decay', type=float, default=2000000, help='Epsilon decay steps')
+    parser.add_argument('--epsilon_final', type=float, default=0.01, help='Minimum epsilon value')
+    parser.add_argument('--epsilon_start', type=float, default=1.0, help='Initial epsilon value')
+    parser.add_argument('--learning_start', type=int, default=10000, help='Learning start steps')
+    parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
+    parser.add_argument('--buffer_size', type=int, default=100000, help='Buffer size')
+
+    # PPO
+    parser.add_argument('--hidden_dim_ppo', type=int, default=256, help='Hidden dimension for PPOs')
+    parser.add_argument('--lr_actor', type=float, default=3e-4, help='Actor Learning rate (if None, use --lr)')
+    parser.add_argument('--lr_critic', type=float, default=1e-3, help='Critic Learning rate (if None, use --lr)')
+    parser.add_argument('--ppo_clip', type=float, default=0.2, help='PPO Clip range')
+    parser.add_argument('--ppo_epochs', type=int, default=10, help='Number of PPO epochs')
+    parser.add_argument('--mini_batch_size', type=int, default=64, help='Mini batch size for PPO')
+    parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient for PPO')
+    parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient for PPO')
+    parser.add_argument('--horizon', type=int, default=2048, help='Number of steps to run for each environment')
+    parser.add_argument('--gae_lambda', type=float, default=0.95, help='GAE lambda for PPO')
+
+    parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
+    parser.add_argument('--num_envs', type=int, default=16, help='Number of parallel environments')
 
     args = parser.parse_args()
 
