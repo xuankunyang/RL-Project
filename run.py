@@ -5,7 +5,7 @@ import numpy as np
 import gymnasium as gym
 import pickle
 import time
-from gymnasium.wrappers import NormalizeObservation
+from gymnasium.wrappers import NormalizeObservation, RecordVideo
 
 from utils.wrappers import make_atari_env, make_mujoco_env
 from agents.dqn_agent import DQNAgent
@@ -60,7 +60,9 @@ def main():
     parser.add_argument('--episodes', type=int, default=5, help='Number of episodes to evaluate')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device')
-    parser.add_argument('--render', action='store_true', help='Enable rendering')
+    parser.add_argument('--render', action='store_true', help='Enable rendering (window)')
+    parser.add_argument('--save_video', action='store_true', help='Enable video recording (headless friendly)')
+    parser.add_argument('--video_dir', type=str, default='videos', help='Directory to save videos')
     parser.add_argument('--sleep', type=float, default=0.0, help='Sleep time between steps (s) for slower visualization')
     parser.add_argument('--obs_rms_path', type=str, default=None, help='Path to obs_rms.pkl (Required for PPO)')
 
@@ -96,13 +98,33 @@ def main():
         print(f"Warning: Algorithm is PPO but environment {args.env_name} does not look like MuJoCo.")
 
     # === Environment Setup ===
-    render_mode = "human" if args.render else None
+    render_mode = None
+    if args.save_video:
+        render_mode = 'rgb_array'
+    elif args.render:
+        # Check for Display on Linux
+        if os.name == 'posix' and 'DISPLAY' not in os.environ:
+            print("Error: --render requested but no DISPLAY environment variable found (headless server?).")
+            print("Try using --save_video instead.")
+            return
+        render_mode = 'human'
+
     print(f"Creating environment: {args.env_name} with render_mode={render_mode}")
     
     if args.algo == 'dqn':
         env = make_atari_env(args.env_name, num_envs=1, seed=args.seed, is_training=False, render_mode=render_mode)
     else:
         env = make_mujoco_env(args.env_name, num_envs=1, seed=args.seed, is_training=False, render_mode=render_mode)
+
+    if args.save_video:
+        video_folder = os.path.join(args.video_dir, f"{args.env_name}_{args.algo}_{time.strftime('%Y%m%d-%H%M%S')}")
+        print(f"Recording video to {video_folder}")
+        env = RecordVideo(
+            env, 
+            video_folder=video_folder,
+            episode_trigger=lambda x: True, # Record all episodes
+            disable_logger=True
+        )
 
     # === Agent Setup ===
     writer = DummyWriter()
@@ -140,6 +162,7 @@ def main():
                       load_obs_rms(env, final_path)
                  else:
                       print("Warning: No obs_rms_path provided and could not infer one. Performance might be poor if env was normalized.")
+                      print("Note: Older models might not have saved obs_rms.pkl.")
 
     # === Evaluation Loop ===
     print(f"Starting evaluation for {args.episodes} episodes...")
