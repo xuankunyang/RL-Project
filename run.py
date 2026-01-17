@@ -1,5 +1,11 @@
 import argparse
 import os
+
+# Configure MuJoCo for headless rendering
+if os.name == 'posix' and 'DISPLAY' not in os.environ:
+    print("Headless environment detected. Setting MUJOCO_GL='egl'")
+    os.environ['MUJOCO_GL'] = 'egl'
+
 import torch
 import numpy as np
 import gymnasium as gym
