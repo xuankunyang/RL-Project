@@ -17,28 +17,28 @@ EVAL_FREQ=50000
 # Please replace "FILL_ME" with your specific values.
 
 # --- Hopper Set 1 ---
-H1_LR_A="FILL_ME"   # e.g. 3e-4
-H1_LR_C="FILL_ME"   # e.g. 1e-3
-H1_CLIP="FILL_ME"   # e.g. 0.2
-H1_HIDDEN="FILL_ME" # e.g. 256
+H1_LR_A=5e-5
+H1_LR_C=1e-4
+H1_CLIP=0.1
+H1_HIDDEN=256
 
 # --- Hopper Set 2 ---
-H2_LR_A="FILL_ME"
-H2_LR_C="FILL_ME"
-H2_CLIP="FILL_ME"
-H2_HIDDEN="FILL_ME"
+H2_LR_A=3e-5
+H2_LR_C=1e-4
+H2_CLIP=0.1
+H2_HIDDEN=512
 
 # --- Hopper Set 3 ---
-H3_LR_A="FILL_ME"
-H3_LR_C="FILL_ME"
-H3_CLIP="FILL_ME"
-H3_HIDDEN="FILL_ME"
+H3_LR_A=5e-5
+H3_LR_C=1e-4
+H3_CLIP=0.1
+H3_HIDDEN=512
 
 # --- Ant Set 1 ---
-A1_LR_A="FILL_ME"   # Recommended conservative: 5e-5
-A1_LR_C="FILL_ME"   # Recommended conservative: 2e-4
-A1_CLIP="FILL_ME"
-A1_HIDDEN="FILL_ME"
+A1_LR_A=5e-5   # Recommended conservative: 5e-5
+A1_LR_C=2e-4   # Recommended conservative: 2e-4
+A1_CLIP=0.2
+A1_HIDDEN=256
 
 # ================= Helper Function =================
 job_count=0
