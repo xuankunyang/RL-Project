@@ -1,0 +1,184 @@
+import argparse
+import os
+import torch
+import numpy as np
+import gymnasium as gym
+import pickle
+import time
+from gymnasium.wrappers import NormalizeObservation
+
+from utils.wrappers import make_atari_env, make_mujoco_env
+from agents.dqn_agent import DQNAgent
+from agents.ppo_agent import PPOAgent
+
+class DummyWriter:
+    """Dummy SummaryWriter to avoid errors in Agent classes."""
+    def add_scalar(self, *args, **kwargs):
+        pass
+    def add_histogram(self, *args, **kwargs):
+        pass
+    def close(self):
+        pass
+
+def load_obs_rms(env, obs_rms_path):
+    """Load observation normalization statistics for PPO."""
+    if not os.path.exists(obs_rms_path):
+        print(f"Warning: obs_rms file not found at {obs_rms_path}. Running without normalization stats.")
+        return
+
+    print(f"Loading obs_rms from {obs_rms_path}...")
+    with open(obs_rms_path, 'rb') as f:
+        obs_rms = pickle.load(f)
+    
+    # Inject into env
+    current = env
+    found = False
+    while hasattr(current, "env"):
+        if isinstance(current, NormalizeObservation):
+            current.obs_rms = obs_rms
+            # Freeze stats during evaluation
+            current.update = lambda x: None 
+            found = True
+            break
+        current = current.env
+    
+    if found:
+        print("Successfully loaded obs_rms.")
+    else:
+        print("Warning: NormalizeObservation wrapper not found in environment stack.")
+
+def main():
+    parser = argparse.ArgumentParser(description='RL Final Project - Evaluation & Visualization')
+    
+    # === Basic Settings ===
+    parser.add_argument('--env_name', type=str, required=True, help='Gym environment name (e.g., ALE/Breakout-v5, Hopper-v4)')
+    parser.add_argument('--algo', type=str, required=True, choices=['dqn', 'ppo'], help='Algorithm used for training')
+    parser.add_argument('--model_path', type=str, required=True, help='Path to the .pth model file')
+    parser.add_argument('--dqn_type', type=str, default='dqn', choices=['dqn', 'double', 'dueling', 'rainbow'], help='DQN Variant (required for DQN)')
+    
+    # === Evaluation Settings ===
+    parser.add_argument('--episodes', type=int, default=5, help='Number of episodes to evaluate')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device')
+    parser.add_argument('--render', action='store_true', help='Enable rendering')
+    parser.add_argument('--sleep', type=float, default=0.0, help='Sleep time between steps (s) for slower visualization')
+    parser.add_argument('--obs_rms_path', type=str, default=None, help='Path to obs_rms.pkl (Required for PPO)')
+
+    # === Dummy Hyperparams (Required to initialize Agents) ===
+    # These values don't affect evaluation but are needed for __init__
+    parser.add_argument('--hidden_dim_dqn', type=int, default=512)
+    parser.add_argument('--hidden_dim_ppo', type=int, default=256)
+    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--lr_actor', type=float, default=None)
+    parser.add_argument('--lr_critic', type=float, default=None)
+    parser.add_argument('--ppo_clip', type=float, default=0.2)
+    parser.add_argument('--ppo_epochs', type=int, default=10)
+    parser.add_argument('--mini_batch_size', type=int, default=64)
+    parser.add_argument('--vf_coef', type=float, default=0.5)
+    parser.add_argument('--ent_coef', type=float, default=0.01)
+    parser.add_argument('--horizon', type=int, default=2048)
+    parser.add_argument('--gae_lambda', type=float, default=0.95)
+    parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--update_freq', type=int, default=1000)
+    parser.add_argument('--epsilon_start', type=float, default=0.01) # Low epsilon for eval
+    parser.add_argument('--epsilon_final', type=float, default=0.01)
+    parser.add_argument('--epsilon_decay', type=float, default=1000)
+    parser.add_argument('--learning_start', type=int, default=0)
+    parser.add_argument('--buffer_size', type=int, default=1000)
+
+    args = parser.parse_args()
+
+    # === Validation ===
+    if args.algo == 'dqn' and 'ALE' not in args.env_name and 'Breakout' not in args.env_name and 'Pong' not in args.env_name:
+        print(f"Warning: Algorithm is DQN but environment {args.env_name} does not look like Atari.")
+    if args.algo == 'ppo' and ('Hopper' not in args.env_name and 'Ant' not in args.env_name and 'HalfCheetah' not in args.env_name):
+        print(f"Warning: Algorithm is PPO but environment {args.env_name} does not look like MuJoCo.")
+
+    # === Environment Setup ===
+    render_mode = "human" if args.render else None
+    print(f"Creating environment: {args.env_name} with render_mode={render_mode}")
+    
+    if args.algo == 'dqn':
+        env = make_atari_env(args.env_name, num_envs=1, seed=args.seed, is_training=False, render_mode=render_mode)
+    else:
+        env = make_mujoco_env(args.env_name, num_envs=1, seed=args.seed, is_training=False, render_mode=render_mode)
+
+    # === Agent Setup ===
+    writer = DummyWriter()
+    
+    if args.algo == 'dqn':
+        agent = DQNAgent(env, args, writer)
+    else:
+        agent = PPOAgent(env, args, writer)
+
+    # === Load Model ===
+    print(f"Loading model from {args.model_path}...")
+    try:
+        agent.load(args.model_path)
+        print("Model loaded successfully.")
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        return
+
+    # === Load Obs RMS (PPO) ===
+    if args.algo == 'ppo':
+        if args.obs_rms_path:
+             load_obs_rms(env, args.obs_rms_path)
+        else:
+             # Try to infer path
+             inferred_path = args.model_path.replace("model_", "obs_rms_").replace(".pth", ".pkl")
+             if os.path.exists(inferred_path):
+                 print(f"Inferred obs_rms path: {inferred_path}")
+                 load_obs_rms(env, inferred_path)
+             else:
+                 # Check for final_obs_rms.pkl in the same directory
+                 model_dir = os.path.dirname(args.model_path)
+                 final_path = os.path.join(model_dir, "final_obs_rms.pkl")
+                 if os.path.exists(final_path):
+                      print(f"Found final_obs_rms.pkl at {final_path}")
+                      load_obs_rms(env, final_path)
+                 else:
+                      print("Warning: No obs_rms_path provided and could not infer one. Performance might be poor if env was normalized.")
+
+    # === Evaluation Loop ===
+    print(f"Starting evaluation for {args.episodes} episodes...")
+    returns = []
+    
+    for ep in range(args.episodes):
+        state, _ = env.reset(seed=args.seed + ep) # Different seed per episode
+        done = False
+        truncated = False
+        episode_reward = 0
+        step = 0
+        
+        while not (done or truncated):
+            if args.algo == 'dqn':
+                action = agent.select_action(state, steps_done=0, eval_mode=True)
+            else:
+                action, _, _ = agent.select_action(state, eval_mode=True)
+                if isinstance(action, np.ndarray) and len(action.shape) > 1:
+                    action = action[0]
+
+            next_state, reward, done, truncated, _ = env.step(action)
+            episode_reward += reward
+            state = next_state
+            step += 1
+            
+            if args.render and args.sleep > 0:
+                time.sleep(args.sleep)
+
+        returns.append(episode_reward)
+        print(f"Episode {ep+1}/{args.episodes}: Reward = {episode_reward:.2f}, Steps = {step}")
+
+    mean_return = np.mean(returns)
+    std_return = np.std(returns)
+    print("="*40)
+    print(f"Evaluation Finished")
+    print(f"Mean Reward: {mean_return:.2f} +/- {std_return:.2f}")
+    print("="*40)
+    
+    env.close()
+
+if __name__ == "__main__":
+    main()

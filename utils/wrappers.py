@@ -33,7 +33,7 @@ class FireResetWrapper(gym.Wrapper):
                 obs, info = self.env.reset(**kwargs)
         return obs, info
 
-def make_atari_env(env_name, num_envs=1, seed=42, is_training=True):
+def make_atari_env(env_name, num_envs=1, seed=42, is_training=True, render_mode=None):
     """
     针对 Breakout：
     is_training=True:  开启 LifeLoss (掉命即Done), 开启 RewardClip (训练稳定)
@@ -45,7 +45,8 @@ def make_atari_env(env_name, num_envs=1, seed=42, is_training=True):
             env = gym.make(
                 env_name, 
                 frameskip=1,                 
-                repeat_action_probability=0.0 
+                repeat_action_probability=0.0,
+                render_mode=render_mode if rank == 0 else None
             )
             
             # === 【关键点 1】记录原始分数 ===
@@ -97,7 +98,7 @@ def make_atari_env(env_name, num_envs=1, seed=42, is_training=True):
         return make_env(0)()
 
 
-def make_mujoco_env(env_name, num_envs=1, seed=42, is_training=True):
+def make_mujoco_env(env_name, num_envs=1, seed=42, is_training=True, render_mode=None):
     """
     创建一个经过预处理的 MuJoCo 环境 (PPO 专用)
     is_training=True:  开启 Reward Normalize & Clip
@@ -105,7 +106,7 @@ def make_mujoco_env(env_name, num_envs=1, seed=42, is_training=True):
     """
     def make_env(rank):
         def _thunk():
-            env = gym.make(env_name)  # 移除 render_mode 提速
+            env = gym.make(env_name, render_mode=render_mode if rank == 0 else None)
             
             # 1. 记录真实分数 (必须在 Normalize 之前)
             env = RecordEpisodeStatistics(env)

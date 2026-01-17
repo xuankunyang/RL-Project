@@ -7,6 +7,7 @@ import copy
 from datetime import datetime
 import gymnasium as gym
 from torch.utils.tensorboard import SummaryWriter
+import pickle
 
 # 导入我们定义的模块
 from utils.wrappers import make_atari_env, make_mujoco_env
@@ -358,10 +359,25 @@ def main():
             # Save Model
             torch.save(agent.__dict__.get('q_net', agent.__dict__.get('policy')).state_dict(), 
                        os.path.join(model_dir, f"model_{global_step}.pth"))
+            
+            # Save obs_rms for PPO (if available)
+            if args.algo == 'ppo' and obs_rms is not None:
+                with open(os.path.join(model_dir, f"obs_rms_{global_step}.pkl"), 'wb') as f:
+                    pickle.dump(obs_rms, f)
 
     # 4. 保存最终模型
     torch.save(agent.__dict__.get('q_net', agent.__dict__.get('policy')).state_dict(), 
                os.path.join(model_dir, "final_model.pth"))
+    
+    # Save final obs_rms for PPO
+    if args.algo == 'ppo':
+        try:
+            obs_rms_list = env.get_attr("obs_rms")
+            if obs_rms_list and len(obs_rms_list) > 0:
+                with open(os.path.join(model_dir, "final_obs_rms.pkl"), 'wb') as f:
+                    pickle.dump(obs_rms_list[0], f)
+        except:
+            pass
     
     env.close()
     writer.close()
