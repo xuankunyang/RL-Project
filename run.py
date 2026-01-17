@@ -17,6 +17,13 @@ from utils.wrappers import make_atari_env, make_mujoco_env
 from agents.dqn_agent import DQNAgent
 from agents.ppo_agent import PPOAgent
 
+# Try to import BEST_MODELS configuration
+try:
+    from configs.best_models import BEST_MODELS
+except ImportError:
+    print("Warning: Could not import BEST_MODELS from configs.best_models.")
+    BEST_MODELS = {}
+
 class DummyWriter:
     """Dummy SummaryWriter to avoid errors in Agent classes."""
     def add_scalar(self, *args, **kwargs):
@@ -59,7 +66,7 @@ def main():
     # === Basic Settings ===
     parser.add_argument('--env_name', type=str, required=True, help='Gym environment name (e.g., ALE/Breakout-v5, Hopper-v4)')
     parser.add_argument('--algo', type=str, required=True, choices=['dqn', 'ppo'], help='Algorithm used for training')
-    parser.add_argument('--model_path', type=str, required=True, help='Path to the .pth model file')
+    parser.add_argument('--model_path', type=str, default=None, help='Path to the .pth model file (Optional if in BEST_MODELS)')
     parser.add_argument('--dqn_type', type=str, default='dqn', choices=['dqn', 'double', 'dueling', 'rainbow'], help='DQN Variant (required for DQN)')
     
     # === Evaluation Settings ===
@@ -76,26 +83,33 @@ def main():
     # These values don't affect evaluation but are needed for __init__
     parser.add_argument('--hidden_dim_dqn', type=int, default=512)
     parser.add_argument('--hidden_dim_ppo', type=int, default=256)
-    parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--lr_actor', type=float, default=None)
-    parser.add_argument('--lr_critic', type=float, default=None)
-    parser.add_argument('--ppo_clip', type=float, default=0.2)
-    parser.add_argument('--ppo_epochs', type=int, default=10)
-    parser.add_argument('--mini_batch_size', type=int, default=64)
-    parser.add_argument('--vf_coef', type=float, default=0.5)
-    parser.add_argument('--ent_coef', type=float, default=0.01)
-    parser.add_argument('--horizon', type=int, default=2048)
-    parser.add_argument('--gae_lambda', type=float, default=0.95)
-    parser.add_argument('--gamma', type=float, default=0.99)
-    parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--update_freq', type=int, default=1000)
-    parser.add_argument('--epsilon_start', type=float, default=0.01) # Low epsilon for eval
-    parser.add_argument('--epsilon_final', type=float, default=0.01)
-    parser.add_argument('--epsilon_decay', type=float, default=1000)
-    parser.add_argument('--learning_start', type=int, default=0)
-    parser.add_argument('--buffer_size', type=int, default=1000)
 
     args = parser.parse_args()
+
+    # === Load Configuration from BEST_MODELS ===
+    if args.model_path is None:
+        if args.env_name in BEST_MODELS and args.algo in BEST_MODELS[args.env_name]:
+            config = BEST_MODELS[args.env_name][args.algo]
+            print(f"Loading best configuration for {args.env_name} ({args.algo})...")
+            
+            args.model_path = config.get('model_path')
+            
+            # Load other optional configs
+            if 'obs_rms_path' in config:
+                args.obs_rms_path = config['obs_rms_path']
+            if 'dqn_type' in config:
+                args.dqn_type = config['dqn_type']
+            if 'hidden_dim_dqn' in config:
+                args.hidden_dim_dqn = config['hidden_dim_dqn']
+            if 'hidden_dim_ppo' in config:
+                args.hidden_dim_ppo = config['hidden_dim_ppo']
+                
+            print(f"  Model Path: {args.model_path}")
+            if args.obs_rms_path:
+                print(f"  Obs RMS Path: {args.obs_rms_path}")
+        else:
+            print(f"Error: No model_path provided and no configuration found for {args.env_name} / {args.algo} in BEST_MODELS.")
+            return
 
     # === Validation ===
     if args.algo == 'dqn' and 'ALE' not in args.env_name and 'Breakout' not in args.env_name and 'Pong' not in args.env_name:
