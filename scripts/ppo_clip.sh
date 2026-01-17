@@ -49,7 +49,7 @@ for clip in "${CLIPS[@]}"; do
         echo "[Queue] Job $job_count | GPU: $device | Clip: $clip | Seed: $seed"
 
         # 4. 启动任务
-        python run.py \
+        python train.py \
             --algo ppo \
             --env_name $ENV_NAME \
             --total_timesteps $TOTAL_STEPS \

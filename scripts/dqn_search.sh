@@ -58,7 +58,7 @@ for param in "${PARAMS[@]}"; do
         
         # 启动 Python
         # 注意：这里我们针对 DQN 传入特定参数
-        python run.py \
+        python train.py \
             --algo dqn \
             --dqn_type dueling \
             --env_name $ENV_NAME \

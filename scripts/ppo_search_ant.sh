@@ -51,7 +51,7 @@ for lr_pair in "${LR_PAIRS[@]}"; do
             echo "[Queue] Job $job_count | GPU: $device | HD: $hd | LRa: $lr_a | LRc: $lr_c | Seed: $seed"
 
             # 4. 后台启动 Python 任务
-            python run.py \
+            python train.py \
                 --algo ppo \
                 --env_name $ENV_NAME \
                 --total_timesteps $TOTAL_STEPS \
