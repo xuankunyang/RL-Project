@@ -89,24 +89,37 @@ def main():
     # === Load Configuration from BEST_MODELS ===
     if args.model_path is None:
         if args.env_name in BEST_MODELS and args.algo in BEST_MODELS[args.env_name]:
-            config = BEST_MODELS[args.env_name][args.algo]
-            print(f"Loading best configuration for {args.env_name} ({args.algo})...")
+            algo_config = BEST_MODELS[args.env_name][args.algo]
             
-            args.model_path = config.get('model_path')
-            
-            # Load other optional configs
-            if 'obs_rms_path' in config:
-                args.obs_rms_path = config['obs_rms_path']
-            if 'dqn_type' in config:
-                args.dqn_type = config['dqn_type']
-            if 'hidden_dim_dqn' in config:
-                args.hidden_dim_dqn = config['hidden_dim_dqn']
-            if 'hidden_dim_ppo' in config:
-                args.hidden_dim_ppo = config['hidden_dim_ppo']
+            # Select specific config based on algorithm variant
+            config = None
+            if args.algo == 'dqn':
+                if args.dqn_type in algo_config:
+                    config = algo_config[args.dqn_type]
+                    print(f"Loading best configuration for {args.env_name} ({args.algo} - {args.dqn_type})...")
+                else:
+                    print(f"Error: Configuration for DQN variant '{args.dqn_type}' not found in BEST_MODELS.")
+                    return
+            else:
+                # For PPO or others without sub-variants
+                config = algo_config
+                print(f"Loading best configuration for {args.env_name} ({args.algo})...")
+
+            if config:
+                args.model_path = config.get('model_path')
                 
-            print(f"  Model Path: {args.model_path}")
-            if args.obs_rms_path:
-                print(f"  Obs RMS Path: {args.obs_rms_path}")
+                # Load other optional configs
+                if 'obs_rms_path' in config:
+                    args.obs_rms_path = config['obs_rms_path']
+                # dqn_type is already in args, but we could enforce it from config if needed
+                if 'hidden_dim_dqn' in config:
+                    args.hidden_dim_dqn = config['hidden_dim_dqn']
+                if 'hidden_dim_ppo' in config:
+                    args.hidden_dim_ppo = config['hidden_dim_ppo']
+                    
+                print(f"  Model Path: {args.model_path}")
+                if args.obs_rms_path:
+                    print(f"  Obs RMS Path: {args.obs_rms_path}")
         else:
             print(f"Error: No model_path provided and no configuration found for {args.env_name} / {args.algo} in BEST_MODELS.")
             return

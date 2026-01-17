@@ -7,9 +7,22 @@ BEST_MODELS = {
     # ALE/Breakout-v5
     "ALE/Breakout-v5": {
         "dqn": {
-            "model_path": "checkpoints/Breakout_best_dqn.pth", # Placeholder, update after training
-            "dqn_type": "rainbow",
-            "hidden_dim_dqn": 512,
+            "dqn": {
+                "model_path": "checkpoints/Breakout_best_dqn.pth",
+                "hidden_dim_dqn": 512,
+            },
+            "double": {
+                "model_path": "checkpoints/Breakout_best_double.pth",
+                "hidden_dim_dqn": 512,
+            },
+            "dueling": {
+                "model_path": "checkpoints/Breakout_best_dueling.pth",
+                "hidden_dim_dqn": 512,
+            },
+            "rainbow": {
+                "model_path": "checkpoints/Breakout_best_rainbow.pth",
+                "hidden_dim_dqn": 512,
+            },
         }
     },
     
