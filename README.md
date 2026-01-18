@@ -59,6 +59,16 @@ RL-Project/
 
 The `run.py` script is the primary tool for evaluating and visualizing trained agents. It automatically infers the algorithm and loads the best model configuration if available.
 
+### Available Algorithms
+
+*   **DQN Variants:** `dqn`, `double`, `dueling`, `rainbow`
+*   **PPO:** `ppo`
+
+### Available Environments
+
+*   **Atari:** `ALE/Breakout-v5`, `ALE/Pong-v5`
+*   **MuJoCo:** `HalfCheetah-v4`, `Hopper-v4`, `Ant-v4`
+
 ### Basic Usage
 Evaluate the best available model for a specific environment:
 
